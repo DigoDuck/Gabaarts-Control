@@ -8,6 +8,7 @@ from django.db.models import DecimalField, ExpressionWrapper, F, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.core.models import Sale, SaleItem
+from .costing import q2
 
 MONEY = DecimalField(max_digits=12, decimal_places=2)
 # frete null = snapshot ainda não rodou; conta como zero em vez de anular a linha
@@ -29,18 +30,19 @@ def sales_summary(date_from, date_to, channel=None):
         items = items.filter(sale__channel=channel)
 
     totals = items.aggregate(revenue=Sum(REVENUE), profit=Sum(PROFIT))
-    revenue = totals["revenue"] or Decimal("0")
+    revenue = totals["revenue"] if totals["revenue"] is not None else Decimal("0.00")
+    profit = totals["profit"] if totals["profit"] is not None else Decimal("0.00")
     sales_count = items.values("sale_id").distinct().count()
 
     by_channel = list(
-        items.values(channel_name=F("sale__channel__name"))
+        items.values("sale__channel_id", channel_name=F("sale__channel__name"))
         .annotate(revenue=Sum(REVENUE), profit=Sum(PROFIT))
         .order_by("-revenue")
     )
     return {
         "revenue": revenue,
-        "profit": totals["profit"] or Decimal("0"),
+        "profit": profit,
         "sales_count": sales_count,
-        "avg_ticket": revenue / sales_count if sales_count else Decimal("0"),
+        "avg_ticket": q2(revenue / sales_count) if sales_count else Decimal("0.00"),
         "by_channel": by_channel,
     }

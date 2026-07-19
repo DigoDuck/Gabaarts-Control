@@ -52,3 +52,16 @@ def test_filtro_por_canal(vendas):
     resumo = sales_summary(date(2026, 7, 1), date(2026, 7, 31), channel=shopee)
     assert resumo["revenue"] == Decimal("40.00")
     assert resumo["sales_count"] == 1
+
+
+def test_ticket_medio_arredonda_meio_centavo():
+    insta = Channel.objects.get(slug="instagram")
+    caneca = Product.objects.create(name="Caneca", material_cost=Decimal("10.49"))
+    for preco in (Decimal("10.00"), Decimal("10.01")):
+        sale = Sale.objects.create(date=date(2026, 7, 15), channel=insta,
+                                   status=Sale.Status.COMPLETED)
+        SaleItem.objects.create(sale=sale, product=caneca, qty=1, unit_price=preco,
+                                unit_cogs=Decimal("5.00"), unit_fee=Decimal("0"),
+                                unit_freight=Decimal("0"))
+    resumo = sales_summary(date(2026, 7, 1), date(2026, 7, 31))
+    assert resumo["avg_ticket"] == Decimal("10.01")  # 20,01 / 2 = 10,005 → HALF_UP
