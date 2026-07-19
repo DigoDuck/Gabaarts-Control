@@ -10,12 +10,19 @@ def suggested_price(cogs, margin):
 
     `cogs` deve vir em precisão CHEIA (sem q2) — é o que faz a caneca dar
     30,31 e não 30,32 (planilha §0.2).
+
+    Pré-condição: margin < 1 — garantida na borda (validator de
+    target_margin_pct no model; serializer na fase 2). Função pura não revalida.
     """
     return q2(cogs / (1 - margin))
 
 
 def simulate(product, channel, price, freight=None):
-    """Margem R$ e % num preço dado + situação vs meta do produto (§3.2)."""
+    """Margem R$ e % num preço dado + situação vs meta do produto (§3.2).
+
+    Pré-condição: price > 0 — garantida na borda (SaleItem.clean;
+    serializer na fase 2). Função pura não revalida.
+    """
     if freight is None:
         freight = channel.default_freight or Decimal("0")
     cogs = unit_cogs(product)["total"]
@@ -26,7 +33,7 @@ def simulate(product, channel, price, freight=None):
     return {
         "cogs": q2(cogs),
         "fee": q2(fee),
-        "freight": freight,
+        "freight": q2(freight),
         "profit": q2(profit),
         "margin_pct": margin,
         "status": status,

@@ -33,3 +33,15 @@ def test_simulate_caneca_na_shopee():
     assert result["fee"] == Decimal("12.00")
     assert result["profit"] == Decimal("12.84")  # 40 − 15,1566... − 12 → 12,84
     assert result["status"] == "abaixo da meta"  # 32,1% < meta de 50%
+
+
+@pytest.mark.django_db
+def test_simulate_arredonda_frete_na_saida():
+    filha = Maker.objects.get(name="Filha")
+    caneca = Product.objects.create(
+        name="Caneca", material_cost=Decimal("10.49"), production_time_min=10,
+        maker=filha, packaging_cost=Decimal("3.00"), target_margin_pct=Decimal("0.5"),
+    )
+    shopee = Channel.objects.get(slug="shopee")
+    result = simulate(caneca, shopee, Decimal("40.00"), freight=Decimal("3.456"))
+    assert result["freight"] == Decimal("3.46")
