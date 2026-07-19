@@ -17,6 +17,16 @@ def suggested_price(cogs, margin):
     return q2(cogs / (1 - margin))
 
 
+def margin_on_price(profit, price):
+    """Margem sobre o preço (invariante do domínio): lucro / preço, nunca markup."""
+    return profit / price
+
+
+def margin_status(margin, target):
+    """Rótulo da margem vs meta — único dono das strings usadas por service e Admin."""
+    return "abaixo da meta" if margin < target else "na meta ou acima"
+
+
 def simulate(product, channel, price, freight=None):
     """Margem R$ e % num preço dado + situação vs meta do produto (§3.2).
 
@@ -28,8 +38,8 @@ def simulate(product, channel, price, freight=None):
     cogs = unit_cogs(product)["total"]
     fee = channel_fee(channel, price)["total"]
     profit = price - cogs - fee - freight
-    margin = profit / price
-    status = "abaixo da meta" if margin < product.target_margin_pct else "na meta ou acima"
+    margin = margin_on_price(profit, price)
+    status = margin_status(margin, product.target_margin_pct)
     return {
         "cogs": q2(cogs),
         "fee": q2(fee),

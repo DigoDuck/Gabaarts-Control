@@ -6,7 +6,7 @@ from .models import (
     Channel, ChannelFeeTier, ComboItem, Equipment, Maker, Product, Sale, SaleItem,
 )
 from .services.costing import q2, unit_cogs
-from .services.pricing import suggested_price
+from .services.pricing import margin_on_price, margin_status, suggested_price
 from .services.sales import refresh_snapshots
 
 admin.site.site_header = "Gabaarts Control"
@@ -34,6 +34,9 @@ class ProductAdmin(admin.ModelAdmin):
     inlines = [ComboItemInline]
     readonly_fields = ["cogs_breakdown", "suggested_price_display", "base_price_status"]
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("maker")
+
     @admin.display(description="COGS (R$)")
     def cogs_display(self, obj):
         return q2(unit_cogs(obj)["total"])
@@ -57,9 +60,9 @@ class ProductAdmin(admin.ModelAdmin):
         if obj is None or obj.pk is None or not obj.base_price:
             return "—"
         # margem no preço base em canal direto (taxa 0); por canal é a simulação (fase 2)
-        margin = (obj.base_price - unit_cogs(obj)["total"]) / obj.base_price
-        label = "abaixo da meta" if margin < obj.target_margin_pct else "na meta ou acima"
-        return f"margem {q2(margin * 100)}% — {label}"
+        margin = margin_on_price(obj.base_price - unit_cogs(obj)["total"], obj.base_price)
+        label = margin_status(margin, obj.target_margin_pct)
+        return f"margem {q2(margin * 100)}% no canal direto (sem taxa) — {label}"
 
 
 class ChannelFeeTierInline(admin.TabularInline):
@@ -90,8 +93,8 @@ class SaleItemInline(admin.TabularInline):
     def status_vs_target(self, obj):
         if obj is None or obj.pk is None or not obj.unit_price:
             return "—"
-        margin = obj.unit_profit / obj.unit_price
-        label = "abaixo da meta" if margin < obj.product.target_margin_pct else "na meta ou acima"
+        margin = margin_on_price(obj.unit_profit, obj.unit_price)
+        label = margin_status(margin, obj.product.target_margin_pct)
         return f"margem {q2(margin * 100)}% — {label}"
 
 
@@ -104,7 +107,7 @@ class SaleAdmin(admin.ModelAdmin):
     inlines = [SaleItemInline]
 
     def get_queryset(self, request):
-        return super().get_queryset(request).prefetch_related("items")
+        return super().get_queryset(request).select_related("channel").prefetch_related("items")
 
     def save_related(self, request, form, formsets, change):
         # snapshot automático DEPOIS dos itens salvos; editar recalcula (arquitetura §1.3)

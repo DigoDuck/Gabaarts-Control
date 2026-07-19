@@ -4,7 +4,7 @@ import pytest
 
 from apps.core.models import Channel, Maker, Product
 from apps.core.services.costing import unit_cogs
-from apps.core.services.pricing import simulate, suggested_price
+from apps.core.services.pricing import margin_status, simulate, suggested_price
 
 
 def caneca_cogs():
@@ -89,3 +89,8 @@ def test_arredondamento_nao_cruza_fronteira_de_faixa():
     result = target_price(shopee, Decimal("30.399"), Decimal("0.37"))
     assert result["price"] == Decimal("79.99")
     assert result["tier"].min_price == Decimal("8.00")
+
+
+def test_margem_exatamente_na_meta_conta_como_na_meta():
+    assert margin_status(Decimal("0.5"), Decimal("0.5")) == "na meta ou acima"
+    assert margin_status(Decimal("0.4999"), Decimal("0.5")) == "abaixo da meta"
