@@ -10,8 +10,8 @@ pytestmark = pytest.mark.django_db
 
 
 def canal():
-    # canal local: o seed só chega na Task 3
-    return Channel.objects.create(name="Instagram", slug="instagram")
+    # canal seedado pela migration 0002_seed
+    return Channel.objects.get(slug="instagram")
 
 
 def test_kit_dentro_de_kit_bloqueado():
