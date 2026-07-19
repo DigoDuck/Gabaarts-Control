@@ -38,3 +38,89 @@ def simulate(product, channel, price, freight=None):
         "margin_pct": margin,
         "status": status,
     }
+
+
+ONE_CENT = Decimal("0.01")
+# tolerância p/ resíduo de divisão Decimal não rejeitar a solução exata da faixa
+MARGIN_EPS = Decimal("1E-9")
+
+
+def target_price(channel, cogs, margin, freight=None):
+    """Menor preço que entrega a margem-alvo no canal (arquitetura §2.3).
+
+    Enumeração de faixas, exata e sem iteração numérica:
+      1. solução fechada por faixa, aceita só se o preço cai na própria faixa;
+      2. limites inferiores das faixas entram como candidatos (a taxa salta neles);
+      3. responde o menor candidato cuja margem real ≥ alvo.
+    Retorna {price, tier, warnings}; price=None se a margem for inatingível.
+    """
+    if freight is None:
+        freight = channel.default_freight or Decimal("0")
+    tiers = list(channel.fee_tiers.order_by("min_price"))
+    if not tiers:
+        return {"price": suggested_price(cogs + freight, margin), "tier": None, "warnings": []}
+
+    uppers = [t.min_price for t in tiers[1:]] + [None]
+    candidates = []
+    for tier, upper in zip(tiers, uppers):
+        denom = 1 - tier.commission_pct - margin
+        if denom <= 0:
+            continue  # §2.3 passo 5: sem solução nesta faixa
+        price = (cogs + freight + tier.fixed_fee) / denom
+        if price >= tier.min_price and (upper is None or price < upper):
+            candidates.append(price)
+    candidates.extend(t.min_price for t in tiers if t.min_price > 0)
+
+    viable = [
+        p for p in sorted(candidates)
+        if p > 0 and _margin_at(tiers, cogs, freight, p) >= margin - MARGIN_EPS
+    ]
+    if not viable:
+        return {"price": None, "tier": None, "warnings": ["Margem inatingível neste canal."]}
+
+    price = q2(viable[0])
+    return {
+        "price": price,
+        "tier": _tier_at(tiers, price),
+        "warnings": _dead_zone_warning(tiers, price),
+    }
+
+
+def _tier_at(tiers, price):
+    """Faixa vigente no preço (lista já ordenada por min_price)."""
+    current = None
+    for tier in tiers:
+        if tier.min_price <= price:
+            current = tier
+    return current
+
+
+def _margin_at(tiers, cogs, freight, price):
+    tier = _tier_at(tiers, price)
+    fee = price * tier.commission_pct + tier.fixed_fee if tier else Decimal("0")
+    return (price - cogs - fee - freight) / price
+
+
+def _dead_zone_warning(tiers, price):
+    """Zona morta (§2.2): logo acima da próxima fronteira o líquido despenca.
+
+    COGS e frete são constantes dos dois lados da fronteira, então a zona
+    morta só depende das taxas — por isso não entram aqui.
+    """
+    current = _tier_at(tiers, price)
+    idx = tiers.index(current)
+    if idx + 1 >= len(tiers):
+        return []
+    nxt = tiers[idx + 1]
+    edge = nxt.min_price - ONE_CENT
+    net_edge = edge - (edge * current.commission_pct + current.fixed_fee)
+    denom = 1 - nxt.commission_pct
+    if denom <= 0:
+        return []
+    recovery = (net_edge + nxt.fixed_fee) / denom  # preço onde o líquido volta a empatar
+    if recovery <= nxt.min_price:
+        return []
+    return [
+        f"Zona morta: entre R$ {nxt.min_price} e R$ {q2(recovery)} o líquido é menor "
+        f"que em R$ {edge}. Fique em R$ {edge} ou pule para R$ {q2(recovery)}+."
+    ]

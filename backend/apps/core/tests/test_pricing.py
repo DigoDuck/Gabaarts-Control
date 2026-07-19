@@ -45,3 +45,38 @@ def test_simulate_arredonda_frete_na_saida():
     shopee = Channel.objects.get(slug="shopee")
     result = simulate(caneca, shopee, Decimal("40.00"), freight=Decimal("3.456"))
     assert result["freight"] == Decimal("3.46")
+
+
+# --- target_price (arquitetura §2.3) ---
+from apps.core.services.pricing import target_price  # noqa: E402
+
+
+@pytest.mark.django_db
+def test_preco_alvo_shopee_cai_na_faixa():
+    shopee = Channel.objects.get(slug="shopee")
+    result = target_price(shopee, Decimal("30.00"), Decimal("0.37"))
+    # faixa 8–80 (20% + 4): (30 + 4) / (1 − 0,20 − 0,37) = 79,0697... → 79,07
+    assert result["price"] == Decimal("79.07")
+    assert result["tier"].min_price == Decimal("8.00")
+
+
+@pytest.mark.django_db
+def test_preco_alvo_avisa_zona_morta():  # §2.2: "fique em 79,99 ou pule para 88,36+"
+    shopee = Channel.objects.get(slug="shopee")
+    result = target_price(shopee, Decimal("30.00"), Decimal("0.37"))
+    assert any("88.36" in w for w in result["warnings"])
+
+
+@pytest.mark.django_db
+def test_margem_inatingivel():  # §2.3 passo 5: 90% não cabe em faixa nenhuma
+    shopee = Channel.objects.get(slug="shopee")
+    result = target_price(shopee, Decimal("30.00"), Decimal("0.90"))
+    assert result["price"] is None
+    assert result["warnings"] == ["Margem inatingível neste canal."]
+
+
+@pytest.mark.django_db
+def test_preco_alvo_canal_direto_equivale_ao_cost_plus():
+    insta = Channel.objects.get(slug="instagram")
+    result = target_price(insta, caneca_cogs(), Decimal("0.5"))
+    assert result["price"] == Decimal("30.31")
