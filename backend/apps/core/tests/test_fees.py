@@ -14,7 +14,10 @@ def shopee():
 
 
 def test_taxa_shopee_a_40():  # planilha §0.2: faixa 8–80 = 20% + 4 → R$ 12,00
-    assert channel_fee(shopee(), Decimal("40.00"))["total"] == Decimal("12.00")
+    result = channel_fee(shopee(), Decimal("40.00"))
+    assert result["total"] == Decimal("12.00")
+    assert result["pct"] == Decimal("0.20")
+    assert result["fixed"] == Decimal("4.00")
 
 
 def test_faixa_de_50_pct_abaixo_de_8():
@@ -26,6 +29,10 @@ def test_fronteiras_das_faixas():  # min_price pertence à faixa de cima
     assert channel_fee(shopee(), Decimal("80.00"))["total"] == Decimal("27.20")
     assert channel_fee(shopee(), Decimal("100.00"))["total"] == Decimal("34.00")
     assert channel_fee(shopee(), Decimal("200.00"))["total"] == Decimal("54.00")
+    # lado de baixo das fronteiras: resolve na faixa inferior
+    assert q2(channel_fee(shopee(), Decimal("79.99"))["total"]) == Decimal("20.00")
+    assert q2(channel_fee(shopee(), Decimal("99.99"))["total"]) == Decimal("30.00")
+    assert q2(channel_fee(shopee(), Decimal("199.99"))["total"]) == Decimal("48.00")
 
 
 def test_canais_diretos_taxa_zero():  # decisão B9
@@ -37,3 +44,9 @@ def test_canais_diretos_taxa_zero():  # decisão B9
 def test_site_gateway_5_pct():  # provisório, arquitetura §6
     site = Channel.objects.get(slug="site")
     assert channel_fee(site, Decimal("40.00"))["total"] == Decimal("2.00")
+
+
+def test_canal_sem_faixas_cadastradas_taxa_zero():
+    novo = Channel.objects.create(name="Novo canal", slug="novo-canal")
+    result = channel_fee(novo, Decimal("50.00"))
+    assert result == {"pct": Decimal("0"), "fixed": Decimal("0"), "total": Decimal("0")}
