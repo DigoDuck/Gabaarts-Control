@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 
 from apps.core.models import Channel, Maker, Product, Sale, SaleItem
+from apps.core.services import sales as sales_service
 from apps.core.services.sales import refresh_snapshots
 
 pytestmark = pytest.mark.django_db
@@ -57,3 +58,24 @@ def test_frete_manual_nao_e_sobrescrito():  # decisão A5: frete é manual por i
     refresh_snapshots(sale)
     item.refresh_from_db()
     assert item.unit_freight == Decimal("7.50")
+
+
+def test_refresh_e_atomico(monkeypatch):
+    sale, item, _ = nova_venda()
+    SaleItem.objects.create(sale=sale, product=item.product, qty=1,
+                            unit_price=Decimal("30.00"))
+    chamadas = {"n": 0}
+    taxa_real = sales_service.channel_fee
+
+    def explode_na_segunda(channel, price):
+        chamadas["n"] += 1
+        if chamadas["n"] == 2:
+            raise RuntimeError("falha simulada")
+        return taxa_real(channel, price)
+
+    monkeypatch.setattr(sales_service, "channel_fee", explode_na_segunda)
+    with pytest.raises(RuntimeError):
+        refresh_snapshots(sale)
+    item.refresh_from_db()
+    # rollback total: o primeiro item não pode ter ficado congelado pela metade
+    assert item.unit_cogs == Decimal("0")
