@@ -2,7 +2,7 @@
 from decimal import Decimal
 
 from .costing import q2, unit_cogs
-from .fees import channel_fee
+from .fees import channel_fee, fee_from_tiers, tier_for
 
 
 def suggested_price(cogs, margin):
@@ -79,25 +79,20 @@ def target_price(channel, cogs, margin, freight=None):
         return {"price": None, "tier": None, "warnings": ["Margem inatingível neste canal."]}
 
     price = q2(viable[0])
+    if tier_for(tiers, price) is not tier_for(tiers, viable[0]):
+        # ROUND_HALF_UP cruzou a fronteira de faixa: recua 1 centavo para
+        # permanecer na faixa validada (melhor preço em 2 casas dessa faixa)
+        price -= ONE_CENT
     return {
         "price": price,
-        "tier": _tier_at(tiers, price),
+        "tier": tier_for(tiers, price),
         "warnings": _dead_zone_warning(tiers, price),
     }
 
 
-def _tier_at(tiers, price):
-    """Faixa vigente no preço (lista já ordenada por min_price)."""
-    current = None
-    for tier in tiers:
-        if tier.min_price <= price:
-            current = tier
-    return current
-
-
 def _margin_at(tiers, cogs, freight, price):
-    tier = _tier_at(tiers, price)
-    fee = price * tier.commission_pct + tier.fixed_fee if tier else Decimal("0")
+    # taxa sempre via services/fees — único ponto de entrada (CLAUDE.md)
+    fee = fee_from_tiers(tiers, price)["total"]
     return (price - cogs - fee - freight) / price
 
 
@@ -107,7 +102,7 @@ def _dead_zone_warning(tiers, price):
     COGS e frete são constantes dos dois lados da fronteira, então a zona
     morta só depende das taxas — por isso não entram aqui.
     """
-    current = _tier_at(tiers, price)
+    current = tier_for(tiers, price)
     idx = tiers.index(current)
     if idx + 1 >= len(tiers):
         return []
@@ -121,6 +116,6 @@ def _dead_zone_warning(tiers, price):
     if recovery <= nxt.min_price:
         return []
     return [
-        f"Zona morta: entre R$ {nxt.min_price} e R$ {q2(recovery)} o líquido é menor "
-        f"que em R$ {edge}. Fique em R$ {edge} ou pule para R$ {q2(recovery)}+."
+        f"Zona morta: entre R$ {q2(nxt.min_price)} e R$ {q2(recovery)} o líquido é menor "
+        f"que em R$ {q2(edge)}. Fique em R$ {q2(edge)} ou pule para R$ {q2(recovery)}+."
     ]

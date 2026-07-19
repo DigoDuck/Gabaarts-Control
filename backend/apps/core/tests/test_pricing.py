@@ -80,3 +80,12 @@ def test_preco_alvo_canal_direto_equivale_ao_cost_plus():
     insta = Channel.objects.get(slug="instagram")
     result = target_price(insta, caneca_cogs(), Decimal("0.5"))
     assert result["price"] == Decimal("30.31")
+
+
+@pytest.mark.django_db
+def test_arredondamento_nao_cruza_fronteira_de_faixa():
+    shopee = Channel.objects.get(slug="shopee")
+    # candidato exato 79,9976...: HALF_UP daria 80,00 e trocaria de faixa (20%+4 → 14%+16)
+    result = target_price(shopee, Decimal("30.399"), Decimal("0.37"))
+    assert result["price"] == Decimal("79.99")
+    assert result["tier"].min_price == Decimal("8.00")
