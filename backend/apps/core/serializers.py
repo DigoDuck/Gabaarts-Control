@@ -10,7 +10,9 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Channel, ChannelFeeTier, Equipment, Maker
+from .models import Channel, ChannelFeeTier, ComboItem, Equipment, Maker, Product
+from .services.costing import q2, unit_cogs
+from .services.pricing import suggested_price
 
 
 class ModelCleanMixin:
@@ -107,3 +109,57 @@ class ChannelSerializer(NestedWriteMixin, serializers.ModelSerializer):
                 "Não repita o mesmo 'preço a partir de' no mesmo canal."
             )
         return value
+
+
+class ComboItemSerializer(ModelCleanMixin, serializers.ModelSerializer):
+    # sem combo: o componente só existe dentro do kit
+    component_name = serializers.CharField(source="component.name", read_only=True)
+
+    class Meta:
+        model = ComboItem
+        fields = ["id", "component", "component_name", "qty"]
+
+
+class ProductSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSerializer):
+    nested_field = "combo_items"
+    combo_items = ComboItemSerializer(many=True, required=False)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "name",
+            "category",
+            "is_active",
+            "is_combo",
+            "material_cost",
+            "packaging_cost",
+            "waste_pct",
+            "production_time_min",
+            "batch_size",
+            "maker",
+            "target_margin_pct",
+            "base_price",
+            "combo_items",
+        ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        is_combo = attrs.get(
+            "is_combo", self.instance.is_combo if self.instance else False
+        )
+        if attrs.get("combo_items") and not is_combo:
+            raise serializers.ValidationError(
+                {"combo_items": "Só um produto marcado como kit pode ter componentes."}
+            )
+        return attrs
+
+    def to_representation(self, instance):
+        # calcula o COGS uma vez e reaproveita a precisão cheia no preço sugerido
+        data = super().to_representation(instance)
+        cogs = unit_cogs(instance)
+        data["cogs"] = {key: str(q2(value)) for key, value in cogs.items()}
+        data["suggested_price"] = str(
+            suggested_price(cogs["total"], instance.target_margin_pct)
+        )
+        return data

@@ -8,6 +8,7 @@ router = DefaultRouter()
 router.register("makers", views.MakerViewSet)
 router.register("equipment", views.EquipmentViewSet)
 router.register("channels", views.ChannelViewSet)
+router.register("products", views.ProductViewSet)
 
 urlpatterns = [
     path("auth/token/", obtain_auth_token, name="api-token"),
