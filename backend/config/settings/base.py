@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+import dj_database_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-insecure")
@@ -14,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
     "apps.core",
@@ -21,6 +24,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -48,8 +53,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
+def database_config():
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        return dj_database_url.parse(database_url, conn_max_age=600)
+
+    return {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.environ.get("POSTGRES_DB", "gabaarts"),
         "USER": os.environ.get("POSTGRES_USER", "gabaarts"),
@@ -57,7 +66,9 @@ DATABASES = {
         "HOST": os.environ.get("POSTGRES_HOST", "db"),
         "PORT": os.environ.get("POSTGRES_PORT", "5432"),
     }
-}
+
+
+DATABASES = {"default": database_config()}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -72,8 +83,16 @@ TIME_ZONE = "America/Bahia"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# ponytail: whitenoise sem manifest storage — cache-busting agressivo entra se o Admin em prod incomodar
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 REST_FRAMEWORK = {
     # token para o React; sessão apenas para navegar a API logado no Admin

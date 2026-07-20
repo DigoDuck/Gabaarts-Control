@@ -45,6 +45,55 @@ Sem paginação: o volume atual cabe em uma resposta.
 Dependências de desenvolvimento (pytest) ficam em `backend/requirements-dev.txt`;
 `backend/requirements.txt` tem somente o runtime.
 
+## Deploy
+
+O backend e o PostgreSQL rodam no Railway; o frontend roda na Vercel. O Docker
+Compose continua sendo somente o ambiente de desenvolvimento.
+
+| Variável | Plataforma | Uso |
+|---|---|---|
+| `DATABASE_URL` | Railway | conexão PostgreSQL em URL única |
+| `SECRET_KEY` | Railway | obrigatória em produção, sem valor padrão |
+| `ALLOWED_HOSTS` | Railway | domínio Railway, separado por vírgula |
+| `CORS_ALLOWED_ORIGINS` | Railway | domínio Vercel, separado por vírgula; nunca `*` |
+| `CSRF_TRUSTED_ORIGINS` | Railway | domínio Railway com `https://`, para o Admin em produção |
+| `DJANGO_SETTINGS_MODULE` | Railway | `config.settings.prod` |
+| `VITE_API_URL` | Vercel | URL base da API Railway, sem barra final |
+
+Primeiro deploy:
+
+1. Crie o serviço Railway com root directory `backend/`, adicione o PostgreSQL e
+   configure as variáveis da tabela. Aponte `DATABASE_URL` para a URL fornecida
+   pelo banco.
+2. Faça o deploy do backend e copie a URL pública do Railway.
+3. Crie o projeto Vercel com root directory `frontend/`, defina `VITE_API_URL`
+   com a URL Railway e faça o deploy do frontend.
+4. Volte ao Railway, preencha `CORS_ALLOWED_ORIGINS` com a URL Vercel e faça o
+   redeploy do backend.
+5. Crie usuários e tokens pelo Admin em produção e valide login e listagem de
+   produtos no frontend.
+
+O `backend/railway.json` usa Gunicorn, executa migrations no pré-deploy e coleta
+os estáticos no build da imagem. Para simular localmente a imagem de produção:
+
+```bash
+docker build -t gabaarts-control-backend ./backend
+docker run --rm -p 8011:8000 \
+  -e DJANGO_SETTINGS_MODULE=config.settings.prod \
+  -e SECRET_KEY=prod-check-secret-key-with-enough-length-and-entropy \
+  -e ALLOWED_HOSTS=localhost \
+  -e CSRF_TRUSTED_ORIGINS=https://localhost \
+  -e CORS_ALLOWED_ORIGINS=https://app.example.com \
+  gabaarts-control-backend gunicorn config.wsgi --bind 0.0.0.0:8000
+```
+
+Em outro terminal, valide os estáticos do Admin com:
+
+```bash
+curl -H "Host: localhost" -H "X-Forwarded-Proto: https" \
+  http://localhost:8011/static/admin/css/base.css
+```
+
 ## Testes
 
 ```bash
