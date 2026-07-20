@@ -22,6 +22,7 @@ from .serializers import (
 )
 from .services.costing import unit_cogs
 from .services.pricing import simulate, target_price
+from .services.reports import sales_summary
 
 
 def date_param(request, name):
@@ -135,5 +136,36 @@ class TargetPriceView(APIView):
                 if result["tier"]
                 else None,
                 "warnings": result["warnings"],
+            }
+        )
+
+
+class SummaryView(APIView):
+    """KPIs do dashboard, todos derivados pelo service de relatórios."""
+
+    def get(self, request):
+        date_from = date_param(request, "from")
+        date_to = date_param(request, "to")
+        if date_from is None or date_to is None:
+            raise ValidationError(
+                {"from": "Informe 'from' e 'to' no formato AAAA-MM-DD."}
+            )
+        summary = sales_summary(date_from, date_to, channel_param(request))
+        # dinheiro sai como string para o JSONRenderer não converter Decimal em float
+        return Response(
+            {
+                "revenue": str(summary["revenue"]),
+                "profit": str(summary["profit"]),
+                "sales_count": summary["sales_count"],
+                "avg_ticket": str(summary["avg_ticket"]),
+                "by_channel": [
+                    {
+                        "channel": row["sale__channel_id"],
+                        "channel_name": row["channel_name"],
+                        "revenue": str(row["revenue"]),
+                        "profit": str(row["profit"]),
+                    }
+                    for row in summary["by_channel"]
+                ],
             }
         )

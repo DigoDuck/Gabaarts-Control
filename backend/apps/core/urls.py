@@ -19,5 +19,6 @@ urlpatterns = [
         views.TargetPriceView.as_view(),
         name="pricing-target-price",
     ),
+    path("reports/summary/", views.SummaryView.as_view(), name="reports-summary"),
     path("", include(router.urls)),
 ]
