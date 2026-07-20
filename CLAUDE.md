@@ -6,7 +6,7 @@
 
 - **Nome:** Gabaarts Control
 - **Objetivo em 1 frase:** API interna (Django + DRF) que substitui a planilha de gestão comercial da Gabaarts: vendas, precificação, custos e administrativo. **Não é e-commerce.**
-- **Tipo:** híbrido do DECISIONS.md #001 — Django Admin como UI de cadastro (fase 1) + DRF e React para dashboards internos (fase 2).
+- **Tipo:** DECISIONS.md #001 — Admin como UI de cadastro na fase 1; na fase 2 o React assume cadastro e dashboards, e o Admin vira fallback técnico + gestão de usuários (arquitetura §7, C1/C2).
 - **Fonte de verdade do domínio:** [docs/arquitetura.md](docs/arquitetura.md) (modelo, regras, faseamento e log de decisões de domínio). Em conflito de domínio, a arquitetura vence este arquivo.
 
 ### Invariantes de domínio (NUNCA violar)

@@ -7,7 +7,7 @@
 
 API interna de gestão da Gabaarts: **vendas, finanças e administrativo**. Não é e-commerce e não há plano ativo de virar um; se um dia virar, catálogo e motor de precificação são reaproveitáveis, mas nada de loja é desenhado aqui.
 
-- Stack: Django + DRF; Django Admin como interface de cadastro (Rouseli, não-técnica, usa o Admin em PT); React só em fase posterior, para dashboards internos.
+- Stack: Django + DRF; Django Admin como interface de cadastro na fase 1 (Rouseli, não-técnica, usa o Admin em PT). Na fase 2 o cadastro migra para o React e o Admin vira fallback técnico (decisões C1/C2, seção 7).
 - Um negócio só: sem multi-tenant, sem auth complexa, sem microserviço.
 - Canais ativos: **Instagram**, **WhatsApp** (ambos diretos, taxa 0), **Shopee** (taxa por faixa), **Site** (gateway %, valor a definir). **Mercado Livre e TikTok ficam fora do seed**; quando entrarem, são só linhas novas na tabela de taxas, sem código novo.
 
@@ -195,25 +195,36 @@ Frete: manual por item de venda (`unit_freight`), pré-preenchido com `Channel.d
 
 ## 4. Superfície da API e faseamento
 
-### Fase 1: MVP interno (sem DRF)
+### Fase 1: MVP interno (sem DRF) — concluída em 19/07/2026 (main `74d296d`, 45 testes)
 
 Models + migrations + Admin em PT + services + testes dos services (casos da seção 0.2). O Admin exibe os calculados readonly (COGS com breakdown, preço sugerido, situação vs meta) e a venda usa inline de itens com snapshot automático. **A fase 1 sozinha aposenta a planilha.**
 
 - Sem importador: 19 produtos e 11 vendas, recadastro manual.
 - Seed de `Maker`, `Channel` e `ChannelFeeTier` via data migration.
 
-### Fase 2: API de cálculo + front interno (DRF, depois React)
+### Fase 2: API completa + front interno (DRF + React) — escopo revisto em 19/07/2026
+
+Revisão de escopo (decisões C1/C2, seção 7): **o cadastro migra do Admin para o React**. A API deixa de ser só leitura/cálculo e ganha CRUD completo das entidades de domínio; o Admin permanece como fallback técnico e como gestão de usuários/tokens (DECISIONS.md #008).
 
 | Endpoint | O quê |
 |---|---|
-| `GET /api/products/` · `GET /api/products/{id}/` | catálogo com COGS decomposto |
-| `GET /api/channels/` | canais com faixas de taxa |
-| `POST /api/pricing/simulate/` | `{product, channel, price, freight?}` → taxa, margem R$ e % |
-| `POST /api/pricing/target-price/` | `{product, channel, margin, freight?}` → preço + avisos |
-| `POST /api/sales/` · `GET /api/sales/?from=&to=&channel=` | vendas com snapshot |
-| `GET /api/reports/summary/?from=&to=` | o resumo de vendas |
+| CRUD `/api/products/` (componentes de kit aninhados) | catálogo com COGS decomposto e preço sugerido |
+| CRUD `/api/channels/` (faixas de taxa aninhadas) | canais com faixas |
+| CRUD `/api/makers/` · CRUD `/api/equipment/` | artesãs e equipamentos |
+| CRUD `/api/sales/` (itens aninhados; `?from=&to=&channel=`) | vendas com snapshot no create/update via `services/sales` |
+| `POST /api/pricing/simulate/` | `{product, channel, price, freight?}` → taxa, margem R$ e %, situação vs meta |
+| `POST /api/pricing/target-price/` | `{product, channel, margin, freight?}` → preço + avisos (faixa usada, zona morta) |
+| `GET /api/reports/summary/?from=&to=&channel=` | resumo de vendas (KPIs do dashboard) |
 
-Auth: sessão do Admin cobre o uso interno; DRF TokenAuth simples quando o React chegar.
+Auth: DRF TokenAuth + tela de login no React (DECISIONS.md #008); `IsAuthenticated` como default global.
+
+Execução decomposta em 3 sub-projetos (decisão C5), cada um com spec e plano próprios:
+
+1. **2a — API DRF completa**: serializers com validação (trust boundary), CRUD + endpoints de cálculo + TokenAuth. Abre estendendo os testes de validação da seção 0.2 para o catálogo completo (os 19 produtos da planilha como casos parametrizados).
+2. **2b — Fundação do frontend**: Vite + Tailwind + shadcn, identidade e tokens via pipeline do DESIGN.md, login, e a tela de referência (listagem de produtos) validada pela Rouseli.
+3. **2c — Telas restantes**: CRUDs (vendas com itens, kits, canais/faixas, artesãs, equipamentos), simulador de preço e dashboard.
+
+Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de vendas + quebra por canal + filtro de período, usando somente `reports.sales_summary`. Sem services novos.
 
 ### Evoluções possíveis (não desenhadas, só anotadas)
 
@@ -261,6 +272,17 @@ Auth: sessão do Admin cobre o uso interno; DRF TokenAuth simples quando o React
 | B10 | Custo do Kit 20 bottons | **Exceção que não se repete**; regra de kit é a soma dos componentes (1.4) |
 | Escopo | E-commerce | **Não é e-commerce**: API interna de vendas, finanças e administrativo; o brief antigo do vault está desatualizado e este doc prevalece |
 
+### Chat de 19/07/2026 (escopo da fase 2)
+
+| # | Pergunta | Decisão |
+|---|---|---|
+| C1 | Onde fica o cadastro na fase 2 | **React** (CRUD primeiro); Admin vira fallback técnico. O recadastro dos 19 produtos e 11 vendas será feito pelo React, não pelo Admin |
+| C2 | Linha de corte de telas | **Todas as entidades de domínio no React** (produtos, kits, vendas, canais, faixas, artesãs, equipamentos); usuários/tokens seguem no Admin (#008) |
+| C3 | Dashboard | Mínimo: KPIs do `sales_summary` existente (receita, lucro, ticket médio, nº vendas, quebra por canal) com filtro de período; sem services novos |
+| C4 | Identidade visual | Proposta gerada pelo pipeline do DESIGN.md (consulta → tokens → tela de referência); Rouseli valida vendo a tela pronta |
+| C5 | Execução da fase 2 | Decomposta em 2a (API DRF) → 2b (fundação front) → 2c (telas); um spec e um plano por sub-projeto |
+| C6 | Deploy | **Pendente**: decidir e registrar no DECISIONS.md antes da 2b entregar uso real à Rouseli; fase 1 e 2a rodam local |
+
 ---
 
-*Próximo passo: fase 1 (bootstrap do repo, models, Admin, seeds, testes dos services contra os números da seção 0.2).*
+*Próximo passo: fase 2a — design detalhado da API DRF (formato dos serializers, rotas, erros) e plano de implementação via writing-plans.*
