@@ -5,14 +5,25 @@ models, via ModelCleanMixin, ou dos services.
 """
 
 import copy
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Channel, ChannelFeeTier, ComboItem, Equipment, Maker, Product
+from .models import (
+    Channel,
+    ChannelFeeTier,
+    ComboItem,
+    Equipment,
+    Maker,
+    Product,
+    Sale,
+    SaleItem,
+)
 from .services.costing import q2, unit_cogs
 from .services.pricing import suggested_price
+from .services.sales import refresh_snapshots
 
 
 class ModelCleanMixin:
@@ -162,4 +173,67 @@ class ProductSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeri
         data["suggested_price"] = str(
             suggested_price(cogs["total"], instance.target_margin_pct)
         )
+        return data
+
+
+class SaleItemSerializer(ModelCleanMixin, serializers.ModelSerializer):
+    # snapshots são calculados por services/sales, nunca digitados pelo cliente
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    unit_profit = serializers.DecimalField(
+        max_digits=9, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = SaleItem
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "qty",
+            "unit_price",
+            "unit_freight",
+            "unit_cogs",
+            "unit_fee",
+            "unit_profit",
+        ]
+        read_only_fields = ["unit_cogs", "unit_fee"]
+
+
+class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
+    nested_field = "items"
+    items = SaleItemSerializer(many=True, required=False)
+    channel_name = serializers.CharField(source="channel.name", read_only=True)
+
+    class Meta:
+        model = Sale
+        fields = [
+            "id",
+            "date",
+            "channel",
+            "channel_name",
+            "customer_name",
+            "status",
+            "items",
+        ]
+
+    @transaction.atomic
+    def create(self, validated_data):
+        sale = super().create(validated_data)
+        refresh_snapshots(sale)
+        return sale
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        sale = super().update(instance, validated_data)
+        # trocar o canal também altera a taxa dos itens existentes
+        refresh_snapshots(sale)
+        return sale
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        items = list(instance.items.all())
+        total = sum((item.qty * item.unit_price for item in items), Decimal("0"))
+        profit = sum((item.qty * item.unit_profit for item in items), Decimal("0"))
+        data["total"] = str(q2(total))
+        data["profit"] = str(q2(profit))
         return data
