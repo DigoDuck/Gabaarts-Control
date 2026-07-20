@@ -5,15 +5,23 @@ from datetime import date
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import Channel, Equipment, Maker, Product, Sale
 from .serializers import (
+    ChannelFeeTierSerializer,
     ChannelSerializer,
     EquipmentSerializer,
     MakerSerializer,
+    PCT,
     ProductSerializer,
     SaleSerializer,
+    SimulateInputSerializer,
+    TargetPriceInputSerializer,
 )
+from .services.costing import unit_cogs
+from .services.pricing import simulate, target_price
 
 
 def date_param(request, name):
@@ -82,3 +90,50 @@ class SaleViewSet(viewsets.ModelViewSet):
         if channel:
             queryset = queryset.filter(channel=channel)
         return queryset
+
+
+class SimulateView(APIView):
+    """Margem R$ e percentual num preço dado, comparada com a meta."""
+
+    def post(self, request):
+        payload = SimulateInputSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        result = simulate(
+            data["product"], data["channel"], data["price"], data.get("freight")
+        )
+        # dinheiro e percentual saem como string para preservar Decimal no JSON
+        return Response(
+            {
+                "cogs": str(result["cogs"]),
+                "fee": str(result["fee"]),
+                "freight": str(result["freight"]),
+                "profit": str(result["profit"]),
+                "margin_pct": str(result["margin_pct"].quantize(PCT)),
+                "status": result["status"],
+            }
+        )
+
+
+class TargetPriceView(APIView):
+    """Menor preço que entrega a margem-alvo no canal, com avisos."""
+
+    def post(self, request):
+        payload = TargetPriceInputSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        cogs = unit_cogs(data["product"])["total"]
+        result = target_price(
+            data["channel"], cogs, data["margin"], data.get("freight")
+        )
+        return Response(
+            {
+                "price": str(result["price"])
+                if result["price"] is not None
+                else None,
+                "tier": ChannelFeeTierSerializer(result["tier"]).data
+                if result["tier"]
+                else None,
+                "warnings": result["warnings"],
+            }
+        )

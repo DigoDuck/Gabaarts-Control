@@ -237,3 +237,44 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
         data["total"] = str(q2(total))
         data["profit"] = str(q2(profit))
         return data
+
+
+# percentuais são fração de 4 casas em todo o domínio (arquitetura §3.1)
+PCT = Decimal("0.0001")
+
+
+class SimulateInputSerializer(serializers.Serializer):
+    """Entrada de POST /api/pricing/simulate/."""
+
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    channel = serializers.PrimaryKeyRelatedField(queryset=Channel.objects.all())
+    price = serializers.DecimalField(
+        max_digits=9, decimal_places=2, min_value=Decimal("0.01")
+    )
+    freight = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+    )
+
+
+class TargetPriceInputSerializer(serializers.Serializer):
+    """Entrada de POST /api/pricing/target-price/."""
+
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    channel = serializers.PrimaryKeyRelatedField(queryset=Channel.objects.all())
+    margin = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        min_value=Decimal("0"),
+        max_value=Decimal("0.99"),
+    )
+    freight = serializers.DecimalField(
+        max_digits=9,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+    )

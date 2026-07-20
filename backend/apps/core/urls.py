@@ -13,5 +13,11 @@ router.register("sales", views.SaleViewSet)
 
 urlpatterns = [
     path("auth/token/", obtain_auth_token, name="api-token"),
+    path("pricing/simulate/", views.SimulateView.as_view(), name="pricing-simulate"),
+    path(
+        "pricing/target-price/",
+        views.TargetPriceView.as_view(),
+        name="pricing-target-price",
+    ),
     path("", include(router.urls)),
 ]
