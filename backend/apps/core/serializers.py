@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 
-from .models import Equipment, Maker
+from .models import Channel, ChannelFeeTier, Equipment, Maker
 
 
 class ModelCleanMixin:
@@ -82,3 +82,28 @@ class EquipmentSerializer(serializers.ModelSerializer):
             "useful_life_months",
             "maintenance_status",
         ]
+
+
+class ChannelFeeTierSerializer(serializers.ModelSerializer):
+    # sem channel: a faixa só existe dentro do canal
+    class Meta:
+        model = ChannelFeeTier
+        fields = ["id", "min_price", "commission_pct", "fixed_fee"]
+
+
+class ChannelSerializer(NestedWriteMixin, serializers.ModelSerializer):
+    nested_field = "fee_tiers"
+    fee_tiers = ChannelFeeTierSerializer(many=True, required=False)
+
+    class Meta:
+        model = Channel
+        fields = ["id", "name", "slug", "default_freight", "fee_tiers"]
+
+    def validate_fee_tiers(self, value):
+        # evita transformar a UniqueConstraint em IntegrityError/500
+        prices = [tier["min_price"] for tier in value]
+        if len(prices) != len(set(prices)):
+            raise serializers.ValidationError(
+                "Não repita o mesmo 'preço a partir de' no mesmo canal."
+            )
+        return value
