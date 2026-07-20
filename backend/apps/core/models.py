@@ -66,10 +66,14 @@ class Product(models.Model):
         return self.name
 
     def clean(self):
+        errors = {}
         if self.production_time_min and self.maker_id is None:
-            raise ValidationError(
-                {"maker": "Produto com tempo de produção precisa de artesã."}
-            )
+            errors["maker"] = "Produto com tempo de produção precisa de artesã."
+        # kit dentro de kit também não pode nascer por edição: componente não vira kit
+        if self.is_combo and self.pk and self.used_in_combos.exists():
+            errors["is_combo"] = "Produto que já é componente de kit não pode virar kit."
+        if errors:
+            raise ValidationError(errors)
 
 
 class ComboItem(models.Model):
@@ -116,9 +120,18 @@ class ChannelFeeTier(models.Model):
     channel = models.ForeignKey(
         Channel, verbose_name="canal", on_delete=models.CASCADE, related_name="fee_tiers"
     )
-    min_price = models.DecimalField("preço a partir de (R$)", max_digits=9, decimal_places=2)
-    commission_pct = models.DecimalField("comissão (fração)", max_digits=5, decimal_places=4)
-    fixed_fee = models.DecimalField("taxa fixa (R$)", max_digits=9, decimal_places=2)
+    min_price = models.DecimalField(
+        "preço a partir de (R$)", max_digits=9, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    commission_pct = models.DecimalField(
+        "comissão (fração)", max_digits=5, decimal_places=4,
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("1"))],
+    )
+    fixed_fee = models.DecimalField(
+        "taxa fixa (R$)", max_digits=9, decimal_places=2,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
 
     class Meta:
         verbose_name = "faixa de taxa"

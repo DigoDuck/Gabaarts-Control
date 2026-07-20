@@ -60,6 +60,16 @@ def test_frete_manual_nao_e_sobrescrito():  # decisão A5: frete é manual por i
     assert item.unit_freight == Decimal("7.50")
 
 
+def test_frete_padrao_do_canal_preenche_quando_nao_informado():  # decisão A5
+    sale, item, _ = nova_venda()
+    canal = sale.channel
+    canal.default_freight = Decimal("2.00")
+    canal.save()
+    refresh_snapshots(sale)
+    item.refresh_from_db()
+    assert item.unit_freight == Decimal("2.00")
+
+
 def test_refresh_e_atomico(monkeypatch):
     sale, item, _ = nova_venda()
     SaleItem.objects.create(sale=sale, product=item.product, qty=1,

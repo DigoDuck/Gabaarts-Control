@@ -113,6 +113,10 @@ def _dead_zone_warning(tiers, price):
     morta só depende das taxas — por isso não entram aqui.
     """
     current = tier_for(tiers, price)
+    if current is None:
+        # defensivo: hoje todo candidato viável cai dentro de alguma faixa,
+        # mas chamadas diretas (fase 2) não têm essa garantia
+        return []
     idx = tiers.index(current)
     if idx + 1 >= len(tiers):
         return []

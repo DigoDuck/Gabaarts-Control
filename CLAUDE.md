@@ -15,7 +15,7 @@
 - Margem é **sobre o preço** (não markup): `(preço − COGS − taxa − frete) / preço`. Margem de contribuição, sem rateio de custo fixo por peça.
 - Venda **congela snapshot** (`unit_cogs`, `unit_fee`, `unit_freight`) na criação. Mudar parâmetro (custo/hora, taxa) NUNCA reescreve venda passada.
 - Lucro é sempre **derivado**, nunca digitado. Todo `SaleItem` tem produto cadastrado (não existe item avulso).
-- Taxa de canal só via `services/fees.channel_fee()` — único ponto de entrada no sistema.
+- Taxa de canal só via `services/fees` — `channel_fee()` quando se tem o canal; `fee_from_tiers()`/`tier_for()` para faixas já carregadas em memória (solver). A fórmula da taxa existe num único lugar.
 - Regras de negócio vivem em `services/` (funções puras sobre `Decimal`). Models guardam dado; views e serializers só transportam e validam entrada.
 
 ## Idioma
