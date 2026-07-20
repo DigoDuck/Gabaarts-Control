@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+/* Inter: UI, tabelas e dinheiro. Montserrat Bold: títulos, label de KPI e logo. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/montserrat/700.css";
+
+/* dark mode por classe no <html>, persistido pelo theme store */
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Fonte de verdade: DESIGN.md, seção "Identidade deste projeto".
+  Nenhum componente escreve hex: tudo sai destas variáveis.
+  Os nomes do shadcn (background/foreground/primary/...) são apelidos
+  mapeados no @theme abaixo — a paleta real são os nomes da identidade.
+*/
+:root {
+  /* light */
+  --bg: #ffffff;
+  --surface: #f7f7fa;
+  --surface-2: #ededf3;
+  --text: #14141f;
+  --muted: #5a5a70;
+  --border: #e4e4ed;
+
+  /*
+    Variantes "ink": as cores de estado e a violeta da identidade foram
+    escolhidas como preenchimento e reprovam em AA quando viram TEXTO sobre
+    superfície escura. O princípio 6 (contraste AA) é inegociável, então o texto
+    usa esta rampa derivada; preenchimento continua usando o hex da identidade.
+    Pendente de registro no DESIGN.md (etapa 1 do pipeline).
+  */
+  --danger-ink: #b91c1c;
+  --accent-ink: #7a3dff;
+}
+
+.dark {
+  --bg: #0b0b12;
+  --surface: #14141f;
+  --surface-2: #1d1d2b;
+  --text: #f5f5fa;
+  --muted: #a0a0b8;
+  --border: #262636;
+
+  --danger-ink: #f87171;
+  --accent-ink: #a78bfa;
+}
+
+:root {
+  /* estados: iguais nos dois temas, nunca reaproveitam cor de marca */
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #b45309;
+  --info: #0077ff;
+
+  /* marca: só chrome, nunca dado (DESIGN.md, regra dura 2) */
+  --brand-orange: #ff6a00;
+  --brand-pink: #ff2d85;
+  --brand-violet: #7a3dff;
+  --brand-blue: #0077ff;
+  --brand-cyan: #00e0ff;
+
+  /* token único do gradiente oficial: só em moldura (regra dura 1) */
+  --brand-gradient: linear-gradient(
+    135deg,
+    var(--brand-orange),
+    var(--brand-pink),
+    var(--brand-violet),
+    var(--brand-blue),
+    var(--brand-cyan)
+  );
+
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-danger-ink: var(--danger-ink);
+  --color-accent-ink: var(--accent-ink);
+
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-cyan: var(--brand-cyan);
+
+  /* apelidos que os componentes shadcn esperam */
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--brand-violet);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  /* atenção: no vocabulário do shadcn `muted` é superfície e `muted-foreground`
+     é o texto apagado — o "muted" do DESIGN.md é o segundo */
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--brand-violet);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", "Inter", ui-sans-serif, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+  }
+
+  /* foco visível em tudo que é clicável (princípio 6); componentes shadcn
+     (marcados com data-slot) já trazem o próprio anel e ficam de fora */
+  :focus-visible:not([data-slot]) {
+    @apply outline-2 outline-offset-2 outline-brand-violet;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* moldura, nunca conteúdo (regra dura 1) */
+@utility brand-gradient {
+  background-image: var(--brand-gradient);
+}

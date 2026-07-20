@@ -221,7 +221,7 @@ Auth: DRF TokenAuth + tela de login no React (DECISIONS.md #008); `IsAuthenticat
 Execução decomposta em 3 sub-projetos (decisão C5), cada um com spec e plano próprios:
 
 1. **2a — API DRF completa** — concluída em 20/07/2026. Serializers com validação (trust boundary reaproveitando o `clean()` dos models), CRUD com escrita aninhada, endpoints de cálculo e TokenAuth. Os 19 produtos da planilha viraram teste parametrizado (`tests/test_catalog.py`), estendendo os casos da seção 0.2.
-2. **2b — Fundação do frontend**: Vite + Tailwind + shadcn, identidade e tokens via pipeline do DESIGN.md, login, e a tela de referência (listagem de produtos) validada pela Rouseli.
+2. **2b — Fundação do frontend**: Vite + Tailwind + shadcn, tokens a partir da identidade já fechada no DESIGN.md (brand book da loja, 20/07/2026), CORS, login, e a tela de referência (listagem de produtos) validada pelo Diogo.
 3. **2c — Telas restantes**: CRUDs (vendas com itens, kits, canais/faixas, artesãs, equipamentos), simulador de preço e dashboard.
 
 Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de vendas + quebra por canal + filtro de período, usando somente `reports.sales_summary`. Sem services novos.
@@ -281,7 +281,8 @@ Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de v
 | C3 | Dashboard | Mínimo: KPIs do `sales_summary` existente (receita, lucro, ticket médio, nº vendas, quebra por canal) com filtro de período; sem services novos |
 | C4 | Identidade visual | Proposta gerada pelo pipeline do DESIGN.md (consulta → tokens → tela de referência); Rouseli valida vendo a tela pronta |
 | C5 | Execução da fase 2 | Decomposta em 2a (API DRF) → 2b (fundação front) → 2c (telas); um spec e um plano por sub-projeto |
-| C6 | Deploy | **Pendente**: decidir e registrar no DECISIONS.md antes da 2b entregar uso real à Rouseli; fase 1 e 2a rodam local |
+| C6 | Deploy | **Resolvido em 20/07/2026**: Railway (backend + Postgres) + Vercel (front), DECISIONS.md #010 |
+| C7 | Dono da decisão visual | **Diogo** (20/07/2026). O sistema é de uso interno dos dois; a Rouseli deixa de ser checkpoint de aprovação da UI, o que supersede a validação prevista em C4 |
 
 ---
 
