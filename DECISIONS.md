@@ -74,3 +74,10 @@ Gatilho de revisão: ...
 **Justificativa:** Uso interno com dois usuários conhecidos; JWT com refresh é complexidade sem requisito que a justifique.
 **Trade-off aceito:** Token estático é menos sofisticado; revogação é deletar o token no Admin.
 **Gatilho de revisão:** Exposição pública da API ou usuários externos.
+
+## #009 — Migração para AGENTS.md canônico + fluxo de dois agentes · 2026-07 · Status: Ativa
+
+**Decisão:** AGENTS.md passa a ser a fonte única de regras lida por Claude Code e Codex; CLAUDE.md vira `@AGENTS.md` + seção "Claude Code — específico". Papéis de executor e revisor alternam entre os dois agentes (critério: folga de quota do plano); quem implementou não revisa.
+**Justificativa:** Review cruzado entre vendors ataca cegueira de auto-review (quem implementa tende a não notar os próprios furos); fonte única de regras elimina o risco de CLAUDE.md e AGENTS.md divergirem (drift).
+**Trade-off aceito:** Regras no arquivo canônico ficam menos específicas (não podem nomear subagents/skills exclusivos de um agente); overhead de coordenação para alternar papéis e não deixar dois agentes escreverem na mesma branch.
+**Gatilho de revisão:** Se em 1 mês (até 2026-08-20) o review cruzado não pegar nenhum problema real que o self-review não pegaria, simplificar para executor único.

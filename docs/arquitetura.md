@@ -220,7 +220,7 @@ Auth: DRF TokenAuth + tela de login no React (DECISIONS.md #008); `IsAuthenticat
 
 Execução decomposta em 3 sub-projetos (decisão C5), cada um com spec e plano próprios:
 
-1. **2a — API DRF completa**: serializers com validação (trust boundary), CRUD + endpoints de cálculo + TokenAuth. Abre estendendo os testes de validação da seção 0.2 para o catálogo completo (os 19 produtos da planilha como casos parametrizados).
+1. **2a — API DRF completa** — concluída em 20/07/2026. Serializers com validação (trust boundary reaproveitando o `clean()` dos models), CRUD com escrita aninhada, endpoints de cálculo e TokenAuth. Os 19 produtos da planilha viraram teste parametrizado (`tests/test_catalog.py`), estendendo os casos da seção 0.2.
 2. **2b — Fundação do frontend**: Vite + Tailwind + shadcn, identidade e tokens via pipeline do DESIGN.md, login, e a tela de referência (listagem de produtos) validada pela Rouseli.
 3. **2c — Telas restantes**: CRUDs (vendas com itens, kits, canais/faixas, artesãs, equipamentos), simulador de preço e dashboard.
 
@@ -285,4 +285,4 @@ Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de v
 
 ---
 
-*Próximo passo: fase 2a — design detalhado da API DRF (formato dos serializers, rotas, erros) e plano de implementação via writing-plans.*
+*Próximo passo: fase 2b — fundação do frontend e validação da tela de referência pela Rouseli.*

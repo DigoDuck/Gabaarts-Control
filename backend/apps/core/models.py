@@ -72,6 +72,8 @@ class Product(models.Model):
         # kit dentro de kit também não pode nascer por edição: componente não vira kit
         if self.is_combo and self.pk and self.used_in_combos.exists():
             errors["is_combo"] = "Produto que já é componente de kit não pode virar kit."
+        if not self.is_combo and self.pk and self.combo_items.exists():
+            errors["is_combo"] = "Produto com componentes cadastrados deve permanecer marcado como kit."
         if errors:
             raise ValidationError(errors)
 
