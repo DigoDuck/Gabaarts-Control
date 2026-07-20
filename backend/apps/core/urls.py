@@ -2,8 +2,11 @@ from django.urls import include, path
 from rest_framework.authtoken.views import obtain_auth_token
 from rest_framework.routers import DefaultRouter
 
+from . import views
+
 router = DefaultRouter()
-# os ViewSets entram aqui nas tasks seguintes
+router.register("makers", views.MakerViewSet)
+router.register("equipment", views.EquipmentViewSet)
 
 urlpatterns = [
     path("auth/token/", obtain_auth_token, name="api-token"),
