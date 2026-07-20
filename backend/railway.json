@@ -6,8 +6,6 @@
   },
   "deploy": {
     "startCommand": "gunicorn config.wsgi --bind 0.0.0.0:$PORT",
-    "preDeployCommand": "python manage.py migrate",
-    "healthcheckPath": "/admin/login/",
-    "healthcheckTimeout": 100
+    "preDeployCommand": "python manage.py migrate"
   }
 }

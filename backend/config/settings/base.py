@@ -24,9 +24,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -56,7 +56,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 def database_config():
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
-        return dj_database_url.parse(database_url)
+        return dj_database_url.parse(database_url, conn_max_age=600)
 
     return {
         "ENGINE": "django.db.backends.postgresql",
@@ -85,6 +85,7 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# ponytail: whitenoise sem manifest storage — cache-busting agressivo entra se o Admin em prod incomodar
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = [

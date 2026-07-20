@@ -84,7 +84,6 @@ docker run --rm -p 8011:8000 \
   -e ALLOWED_HOSTS=localhost \
   -e CSRF_TRUSTED_ORIGINS=https://localhost \
   -e CORS_ALLOWED_ORIGINS=https://app.example.com \
-  -e PORT=8000 \
   gabaarts-control-backend gunicorn config.wsgi --bind 0.0.0.0:8000
 ```
 

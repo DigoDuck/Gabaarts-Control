@@ -1,9 +1,11 @@
 import pytest
+from django.test import override_settings
 
 
 pytestmark = pytest.mark.django_db
 
 
+@override_settings(CORS_ALLOWED_ORIGINS=["http://localhost:5173"])
 @pytest.mark.parametrize(
     ("origin", "is_allowed"),
     [
