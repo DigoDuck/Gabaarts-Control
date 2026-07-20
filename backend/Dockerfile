@@ -5,3 +5,4 @@ COPY requirements.txt requirements-dev.txt ./
 # imagem de dev instala os dois; a de prod usará só requirements.txt quando o deploy for decidido
 RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY . .
+RUN python manage.py collectstatic --noinput
