@@ -41,13 +41,38 @@ Precedência em conflito: **princípios e tokens deste arquivo** > impeccable (a
 3. Montar **1 tela de referência** com as etapas 2 e 3 validando os tokens.
 4. Só então escalar para o resto das telas.
 
-## Identidade deste projeto (pendente — definir com a Rouseli antes da fase 2)
+## Identidade deste projeto (definida em 20/07/2026, a partir do brand book da loja)
 
-- **Nome / tagline:** Gabaarts Control ·
-- **Tom visual em 3 palavras:**
-- **Acento principal:** `#`
-- **Dark:** bg `#` · surface `#` · text `#`
-- **Light:** bg `#` · surface `#` · text `#`
-- **Estados:** sucesso `#` · erro `#` · aviso `#`
-- **Fonte UI:** (default: Inter) **Fonte display (opcional):**
-- **Logo / marca:** (a marca Gabaarts já existe; coletar referências com a proprietária)
+- **Nome / tagline:** Gabaarts Control · "Ideias acendem. Design transforma." (tagline é da loja, **não** entra na UI interna)
+- **Tom visual em 3 palavras:** quente, nítido, direto ao dado
+- **Acento principal:** `#7A3DFF` (violeta do meio do gradiente)
+- **Dark:** bg `#0B0B12` · surface `#14141F` · surface-2 `#1D1D2B` · text `#F5F5FA` · muted `#A0A0B8` · border `#262636`
+- **Light:** bg `#FFFFFF` · surface `#F7F7FA` · surface-2 `#EDEDF3` · text `#14141F` · muted `#5A5A70` · border `#E4E4ED`
+- **Estados:** sucesso `#16A34A` · erro `#DC2626` · aviso `#B45309` · info `#0077FF`
+- **Fonte UI:** Inter (dados, tabelas, formulários) · **Fonte display:** Montserrat Bold (títulos, logo, KPI)
+- **Logo / marca:** chama-lettering "GabaArts" com gradiente. 4 versões oficiais: principal, monocromática, negativa, ícone reduzido. Usar o **ícone reduzido** na sidebar e no favicon; a versão completa só na tela de login.
+
+### Paleta de marca (só chrome, nunca dado)
+
+| Token | Hex | Onde |
+|---|---|---|
+| `brand-orange` | `#FF6A00` | gradiente, ícone |
+| `brand-pink` | `#FF2D85` | gradiente |
+| `brand-violet` | `#7A3DFF` | **acento principal**: botão primário, link, foco, item ativo |
+| `brand-blue` | `#0077FF` | gradiente, `info` |
+| `brand-cyan` | `#00E0FF` | gradiente, fim da rampa |
+
+Gradiente oficial: `linear-gradient(135deg, #FF6A00, #FF2D85, #7A3DFF, #0077FF, #00E0FF)`.
+
+### Regras duras desta identidade
+
+1. **Gradiente é decoração de moldura, não de conteúdo.** Permitido em: logo, faixa de topo do login, borda de card de destaque. **Proibido** em texto, número, valor monetário, fundo de tabela, eixo ou série de gráfico.
+2. **Dado é neutro.** Toda célula de valor usa `text` ou `muted`. A cor só entra num número quando ela **significa** algo (margem abaixo da meta → `erro`), e aí vem dos tokens de estado, nunca da marca (princípio 4).
+3. **Dinheiro usa `Inter` com `font-variant-numeric: tabular-nums`.** Montserrat é larga e não alinha coluna de valor. Montserrat fica em título, label de KPI e logo.
+4. **Laranja e rosa da marca reprovam em AA como texto** (`#FF6A00` dá ~2.6:1 no branco). Nunca usar como cor de texto em fundo claro; só como preenchimento de forma ou dentro do gradiente.
+5. **Um acento, não cinco.** O que é clicável é `brand-violet`. Se duas cores de marca disputarem a mesma tela, uma está errada.
+6. Padrão gráfico de chamas: no máximo **uma** superfície vazia por tela (empty state, tela de login), com opacidade baixa. Nunca atrás de conteúdo legível.
+
+### Tela de referência (etapa 3 do fluxo)
+
+Listagem de produtos, com dark e light funcionando, validada pelo Diogo. A Rouseli não é checkpoint de aprovação: o sistema é de uso interno dos dois e o dono da decisão visual é o Diogo.

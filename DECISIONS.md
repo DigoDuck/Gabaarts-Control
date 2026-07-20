@@ -81,3 +81,16 @@ Gatilho de revisão: ...
 **Justificativa:** Review cruzado entre vendors ataca cegueira de auto-review (quem implementa tende a não notar os próprios furos); fonte única de regras elimina o risco de CLAUDE.md e AGENTS.md divergirem (drift).
 **Trade-off aceito:** Regras no arquivo canônico ficam menos específicas (não podem nomear subagents/skills exclusivos de um agente); overhead de coordenação para alternar papéis e não deixar dois agentes escreverem na mesma branch.
 **Gatilho de revisão:** Se em 1 mês (até 2026-08-20) o review cruzado não pegar nenhum problema real que o self-review não pegaria, simplificar para executor único.
+
+## #010 — Deploy: Railway (backend + Postgres) + Vercel (frontend) · 2026-07 · Status: Ativa
+
+**Decisão:** Resolve o C6 da arquitetura. Backend Django e Postgres no Railway; frontend React/Vite na Vercel. O front fala com o backend por HTTPS via CORS restrito ao domínio da Vercel. Sem Docker em produção (o compose continua sendo só o ambiente de dev).
+**Justificativa:** Dois usuários internos acessando de máquinas e celulares diferentes exigem algo publicado; Railway entrega Postgres gerenciado e deploy por git push sem escrever infra, e a Vercel é o caminho de menor atrito para Vite. Uma VPS daria mais controle que o projeto não precisa e cobraria manutenção de SO, backup e TLS.
+**Trade-off aceito:** Duas plataformas em vez de uma (dois painéis, duas variáveis de ambiente para manter em sincronia); lock-in leve de PaaS; custo mensal pequeno em vez de zero. Backup do Postgres passa a depender do plano do Railway, não de script próprio.
+**Gatilho de revisão:** Custo passar de ~US$ 10/mês, ou surgir requisito de dado que não possa sair do Brasil.
+
+**Consequências imediatas (fase 2b):**
+- `django-cors-headers` com `CORS_ALLOWED_ORIGINS` explícito, nunca `*`.
+- `prod.py` ganha o hardening já marcado no `ponytail:` (SSL redirect, HSTS, cookies secure) e `ALLOWED_HOSTS` do domínio Railway.
+- `DATABASE_URL` do Railway precisa ser lida pelo settings (hoje o `base.py` monta a conexão por variáveis separadas).
+- Frontend lê a URL da API de env var da Vercel, nunca hardcoded.
