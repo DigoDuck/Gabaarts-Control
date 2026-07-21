@@ -67,11 +67,22 @@ Gradiente oficial: `linear-gradient(135deg, #FF6A00, #FF2D85, #7A3DFF, #0077FF, 
 ### Regras duras desta identidade
 
 1. **Gradiente é decoração de moldura, não de conteúdo.** Permitido em: logo, faixa de topo do login, borda de card de destaque. **Proibido** em texto, número, valor monetário, fundo de tabela, eixo ou série de gráfico.
-2. **Dado é neutro.** Toda célula de valor usa `text` ou `muted`. A cor só entra num número quando ela **significa** algo (margem abaixo da meta → `erro`), e aí vem dos tokens de estado, nunca da marca (princípio 4).
+2. **Dado é neutro.** Toda célula de valor usa `text` ou `muted`. A cor só entra num número quando ela **significa** algo (margem abaixo da meta → `erro`), e aí vem dos tokens de estado, nunca da marca (princípio 4). Como **texto**, o valor colorido usa a rampa `*-ink` (ver "Rampa de texto colorido" abaixo), que garante AA.
 3. **Dinheiro usa `Inter` com `font-variant-numeric: tabular-nums`.** Montserrat é larga e não alinha coluna de valor. Montserrat fica em título, label de KPI e logo.
 4. **Laranja e rosa da marca reprovam em AA como texto** (`#FF6A00` dá ~2.6:1 no branco). Nunca usar como cor de texto em fundo claro; só como preenchimento de forma ou dentro do gradiente.
 5. **Um acento, não cinco.** O que é clicável é `brand-violet`. Se duas cores de marca disputarem a mesma tela, uma está errada.
 6. Padrão gráfico de chamas: no máximo **uma** superfície vazia por tela (empty state, tela de login), com opacidade baixa. Nunca atrás de conteúdo legível.
+
+### Rampa de texto colorido (AA) — registrada em 21/07/2026 (fase 2b)
+
+Registro da etapa 1 do pipeline (#007): a construção da fundação do front (`frontend-design` + `impeccable`) revelou que as cores de **estado** e a **violeta de acento** passam em AA como *preenchimento*, mas **reprovam como texto** sobre superfície (erro `#DC2626` dá 3.78:1 no `surface` escuro; `brand-violet` dá 3.43:1 no `surface-2` escuro). Como o princípio 6 (contraste AA) é inegociável, o **texto** colorido usa uma rampa derivada por tema; o **preenchimento** continua com o hex da identidade.
+
+| Token | Dark | Light | Uso |
+|---|---|---|---|
+| `--danger-ink` | `#F87171` | `#B91C1C` | texto de erro (validação, valor abaixo da meta) |
+| `--accent-ink` | `#A78BFA` | `#7A3DFF` | texto/ícone do acento (link, item ativo) sobre superfície |
+
+Regra: **preenchimento** (badge, barra, ponto de status, botão) usa `erro`/`brand-violet`; **texto e ícone** coloridos usam `*-ink`. Os outros estados (sucesso, aviso, info) só aparecem como preenchimento até agora; se algum virar texto, ganha a mesma rampa aqui antes de ir para o componente.
 
 ### Tela de referência (etapa 3 do fluxo)
 
