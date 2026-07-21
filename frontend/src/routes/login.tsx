@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { Navigate } from "react-router-dom"
 
-import { Flame, Logo } from "@/components/brand"
+import { Flame } from "@/components/brand"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/store/auth"
+import logoUrl from "@/assets/logo-full.png"
 
 export function Login() {
   const { token, login } = useAuth()
@@ -38,8 +39,9 @@ export function Login() {
         <div className="overflow-hidden rounded-lg border border-border bg-surface">
           <div className="brand-gradient h-1" />
           <div className="space-y-6 p-8">
-            <div className="space-y-1">
-              <Logo />
+            {/* única tela com a logo completa (DESIGN.md); as letras leem nos dois temas */}
+            <div className="flex flex-col items-center gap-2 text-center">
+              <img src={logoUrl} alt="GabaArts" className="h-40 w-auto" />
               <p className="text-sm text-muted-foreground">Gestão comercial da Gabaarts</p>
             </div>
 
