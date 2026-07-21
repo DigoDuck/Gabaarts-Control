@@ -34,7 +34,7 @@ function Sidebar() {
     // abaixo de md a sidebar vira uma tira de ícones: sem drawer, sem JS
     <aside className="flex w-16 shrink-0 flex-col border-r border-border bg-surface md:w-60">
       <div className="flex items-center gap-2.5 px-5 py-5">
-        <Flame className="size-6 shrink-0 text-brand-orange" />
+        <Flame className="size-6 shrink-0" gradient />
         <span className="hidden font-display text-base tracking-tight md:inline">
           GabaArts
         </span>
