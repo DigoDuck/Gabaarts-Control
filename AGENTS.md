@@ -46,7 +46,7 @@ Gabaarts-Control/
 ├── docs/                  # arquitetura e planos (versionado)
 ├── docker-compose.yml
 ├── .env.example           # nunca commitar .env
-├── AGENTS.md  CLAUDE.md  DESIGN.md  DECISIONS.md  README.md
+├── AGENTS.md  CLAUDE.md  DESIGN.md  DECISIONS.md  PRODUCT.md  README.md
 ```
 
 ## Fluxo de Trabalho

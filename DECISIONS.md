@@ -94,3 +94,10 @@ Gatilho de revisão: ...
 - `prod.py` ganha o hardening já marcado no `ponytail:` (SSL redirect, HSTS, cookies secure) e `ALLOWED_HOSTS` do domínio Railway.
 - `DATABASE_URL` do Railway precisa ser lida pelo settings (hoje o `base.py` monta a conexão por variáveis separadas).
 - Frontend lê a URL da API de env var da Vercel, nunca hardcoded.
+
+## #011 — PRODUCT.md como quarto arquivo de documentação (exceção ao #005) · 2026-07 · Status: Ativa
+
+**Decisão:** Este repositório ganha `PRODUCT.md` além dos três fixos do #005. Ele guarda contexto de produto — quem usa, o que cada tela resolve, não-objetivos — e é proibido de repetir domínio (docs/arquitetura.md) ou processo visual (DESIGN.md).
+**Justificativa:** A skill `impeccable`, prevista no DESIGN.md como etapa 3 do pipeline de frontend, exige o arquivo. Independente dela, a fase 2c é a primeira com contexto de produto real que não cabe nos outros arquivos: a usuária principal é não-técnica e isso muda decisão de UI (idioma, texto de erro, mobile), mas não é regra de domínio nem token visual.
+**Trade-off aceito:** Mais um arquivo para manter em dia; o #005 alerta que documentação de agente desatualizada é pior que nenhuma.
+**Gatilho de revisão:** Se o PRODUCT.md passar a fase 2 inteira sem ser atualizado, ou se virar cópia do README, ele é cortado e o #005 volta a valer sem exceção.
