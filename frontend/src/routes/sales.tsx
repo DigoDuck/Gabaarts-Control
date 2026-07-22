@@ -123,7 +123,9 @@ export function Sales() {
                       className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-violet"
                       tabIndex={0}
                       role="link"
-                      aria-label={`Abrir venda de ${sale.date.split("-").reverse().join("/")}`}
+                      aria-label={`Abrir venda de ${sale.date.split("-").reverse().join("/")}${
+                        sale.customer_name ? ` para ${sale.customer_name}` : ""
+                      }`}
                       onClick={() => navigate(`/sales/${sale.id}`)}
                       onKeyDown={(event) => {
                         // linha da tabela não é botão nativo: Enter e Espaço na mão

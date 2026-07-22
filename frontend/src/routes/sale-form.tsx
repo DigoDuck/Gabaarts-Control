@@ -35,9 +35,15 @@ function productOptions(all: Product[], selected: string) {
     }))
 }
 
+/** Frete comparável: null e "" são "não informado"; "0.00" e "0" são o mesmo zero. */
+function freightOf(item: SaleItem) {
+  return item.unit_freight === null || item.unit_freight === "" ? null : Number(item.unit_freight)
+}
+
 /**
  * Itens mudaram? Compara só o que a usuária digita; unit_cogs/unit_fee são
- * congelados pelo backend e não entram na comparação.
+ * congelados pelo backend e não entram na comparação. Preço e frete comparam
+ * numericamente porque "40.00" (API) e "40" (input) são o mesmo preço.
  */
 function itemsChanged(original: SaleItem[], current: SaleItem[]) {
   if (original.length !== current.length) return true
@@ -46,8 +52,8 @@ function itemsChanged(original: SaleItem[], current: SaleItem[]) {
     return (
       item.product !== now.product ||
       item.qty !== now.qty ||
-      item.unit_price !== now.unit_price ||
-      (item.unit_freight ?? null) !== (now.unit_freight ?? null)
+      Number(item.unit_price) !== Number(now.unit_price) ||
+      freightOf(item) !== freightOf(now)
     )
   })
 }
@@ -87,7 +93,12 @@ export function SaleForm() {
 
   useEffect(() => {
     listChannels().then(setChannels).catch(() => setChannels([]))
-    listProducts().then(setProducts).catch(() => setProducts([]))
+    listProducts()
+      .then(setProducts)
+      .catch(() => {
+        setProducts([])
+        setLoadError(true)
+      })
   }, [])
 
   useEffect(() => {
@@ -121,10 +132,16 @@ export function SaleForm() {
   const submit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault()
+      if (editing && loadError) {
+        setErrors({ detail: ["Esta venda não foi carregada. Recarregue a página."] })
+        return
+      }
       if (editing && !saved) {
         // sem a venda carregada não há como saber o que mudou, e cair no create
         // criaria uma venda nova sem a usuária perceber
-        setErrors({ detail: ["Esta venda não foi carregada. Recarregue a página."] })
+        setErrors({
+          detail: ["Esta venda ainda não terminou de carregar. Aguarde um instante e tente de novo."],
+        })
         return
       }
       setSaving(true)
@@ -142,6 +159,12 @@ export function SaleForm() {
             unit_price: item.unit_price || "0",
             unit_freight: item.unit_freight || null,
           })),
+      }
+      if (payload.items.length === 0) {
+        // venda sem item é R$ 0,00 no histórico e a API aceita: barrar aqui
+        setErrors({ items: ["Adicione ao menos um item à venda."] })
+        setSaving(false)
+        return
       }
       try {
         if (editing && saved) {
@@ -161,7 +184,7 @@ export function SaleForm() {
         setSaving(false)
       }
     },
-    [channel, customer, date, editing, id, items, navigate, saved, status],
+    [channel, customer, date, editing, id, items, loadError, navigate, saved, status],
   )
 
   const resumo = summaryErrors(errors)
@@ -239,6 +262,7 @@ export function SaleForm() {
           <div key={index} className="grid gap-2 sm:grid-cols-[1fr_5rem_7rem_7rem_auto]">
             <SelectField
               label="Produto"
+              required
               value={item.product}
               placeholder="Escolha um produto"
               options={productOptions(products, item.product)}

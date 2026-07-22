@@ -83,6 +83,7 @@ export function ProductForm() {
   const [stale, setStale] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }))
@@ -93,23 +94,25 @@ export function ProductForm() {
 
   useEffect(() => {
     if (!editing) return
-    getProduct(Number(id)).then((product) =>
-      setForm({
-        name: product.name,
-        category: product.category,
-        is_active: product.is_active,
-        material_cost: product.material_cost,
-        packaging_cost: product.packaging_cost,
-        waste_pct: fractionToPercent(product.waste_pct),
-        production_time_min: String(product.production_time_min),
-        batch_size: String(product.batch_size),
-        maker: product.maker ? String(product.maker) : "",
-        target_margin_pct: fractionToPercent(product.target_margin_pct),
-        base_price: product.base_price ?? "",
-        is_combo: product.is_combo,
-        combo_items: product.combo_items,
-      }),
-    )
+    getProduct(Number(id))
+      .then((product) =>
+        setForm({
+          name: product.name,
+          category: product.category,
+          is_active: product.is_active,
+          material_cost: product.material_cost,
+          packaging_cost: product.packaging_cost,
+          waste_pct: fractionToPercent(product.waste_pct),
+          production_time_min: String(product.production_time_min),
+          batch_size: String(product.batch_size),
+          maker: product.maker ? String(product.maker) : "",
+          target_margin_pct: fractionToPercent(product.target_margin_pct),
+          base_price: product.base_price ?? "",
+          is_combo: product.is_combo,
+          combo_items: product.combo_items,
+        }),
+      )
+      .catch(() => setLoadError(true))
   }, [editing, id])
 
   const [components, setComponents] = useState<Product[]>([])
@@ -152,6 +155,11 @@ export function ProductForm() {
   const submit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault()
+      if (editing && loadError) {
+        // salvar sobre um formulário que não carregou zeraria os custos do produto
+        setErrors({ detail: ["Este produto não foi carregado. Recarregue a página."] })
+        return
+      }
       setSaving(true)
       setErrors({})
       try {
@@ -166,7 +174,7 @@ export function ProductForm() {
         setSaving(false)
       }
     },
-    [editing, form, id, navigate],
+    [editing, form, id, loadError, navigate],
   )
 
   const resumo = summaryErrors(errors)
@@ -174,6 +182,12 @@ export function ProductForm() {
   return (
     <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="grid gap-4 content-start">
+        {loadError && (
+          <p className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
+            Não foi possível carregar este produto. Volte à lista e tente de novo.
+          </p>
+        )}
+
         {resumo.length > 0 && (
           <div className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
             {resumo.map((message, index) => (

@@ -23,7 +23,11 @@ function Wrapper({
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
       {children}
-      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && !error && (
+        <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
       {/* erro é texto colorido: usa a rampa *-ink, que passa em AA (DESIGN.md) */}
       {error && (
         <p id={`${id}-error`} className="text-xs text-danger-ink">
@@ -48,7 +52,11 @@ export function Field({
       <Input
         id={fieldId}
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${fieldId}-error` : undefined}
+        aria-describedby={
+          [hint && !error ? `${fieldId}-hint` : null, error ? `${fieldId}-error` : null]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         {...props}
       />
     </Wrapper>
@@ -79,7 +87,11 @@ export function SelectField({
         id={fieldId}
         data-slot="input"
         aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${fieldId}-error` : undefined}
+        aria-describedby={
+          [hint && !error ? `${fieldId}-hint` : null, error ? `${fieldId}-error` : null]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
         className={cn(
           "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
           "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
