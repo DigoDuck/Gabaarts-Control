@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { AppShell, NAV } from "@/components/app-shell"
 import { Login } from "@/routes/login"
+import { ProductForm } from "@/routes/product-form"
 import { Products } from "@/routes/products"
 import { Tokens } from "@/routes/tokens"
 
@@ -18,6 +19,8 @@ export default function App() {
         <Route path="/tokens" element={<Tokens />} />
         <Route element={<AppShell />}>
           <Route path="/products" element={<Products />} />
+          <Route path="/products/new" element={<ProductForm />} />
+          <Route path="/products/:id" element={<ProductForm />} />
           {NAV.filter((item) => item.to !== "/products").map((item) => (
             <Route key={item.to} path={item.to} element={<Soon />} />
           ))}
