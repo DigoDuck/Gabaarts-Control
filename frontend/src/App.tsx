@@ -4,6 +4,7 @@ import { AppShell, NAV } from "@/components/app-shell"
 import { Login } from "@/routes/login"
 import { ProductForm } from "@/routes/product-form"
 import { Products } from "@/routes/products"
+import { SaleForm } from "@/routes/sale-form"
 import { Sales } from "@/routes/sales"
 import { Tokens } from "@/routes/tokens"
 
@@ -23,6 +24,8 @@ export default function App() {
           <Route path="/products/new" element={<ProductForm />} />
           <Route path="/products/:id" element={<ProductForm />} />
           <Route path="/sales" element={<Sales />} />
+          <Route path="/sales/new" element={<SaleForm />} />
+          <Route path="/sales/:id" element={<SaleForm />} />
           {NAV.filter((item) => !["/products", "/sales"].includes(item.to)).map((item) => (
             <Route key={item.to} path={item.to} element={<Soon />} />
           ))}
