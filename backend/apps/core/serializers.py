@@ -177,11 +177,12 @@ class ProductSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeri
 
 
 class ProductPreviewSerializer(ProductSerializer):
-    """Mesmos campos do produto, sem as regras de coerência entre campos.
+    """Mesmos campos do produto, sem NENHUMA validação entre campos.
 
-    Validação de campo (tipo, casas decimais, faixas) continua valendo; só o
-    clean() do model sai. Um rascunho com tempo de produção e ainda sem artesã
-    é inválido para salvar e perfeitamente calculável para exibir.
+    Sai o clean() do model e sai também a checagem de combo_items sem
+    is_combo do ProductSerializer. Validação de campo (tipo, casas decimais,
+    faixas) continua valendo. Um rascunho incoerente é inválido para salvar e
+    ainda assim calculável para exibir; o POST real é que barra.
     """
 
     def validate(self, attrs):

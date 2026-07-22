@@ -32,7 +32,8 @@ def test_preview_da_caneca_bate_com_a_planilha(api):
 
 
 def test_preview_nao_cria_produto(api):
-    api.post("/api/products/preview/", {"name": "Rascunho"}, format="json")
+    response = api.post("/api/products/preview/", {"name": "Rascunho"}, format="json")
+    assert response.status_code == 200, response.content
     assert Product.objects.count() == 0
 
 
