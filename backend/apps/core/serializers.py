@@ -237,9 +237,13 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        # snapshot só é refeito quando o payload mexe no que entra na conta.
+        # Verificar ANTES do super(): NestedWriteMixin.update consome "items".
+        recalculates = "channel" in validated_data or "items" in validated_data
         sale = super().update(instance, validated_data)
-        # trocar o canal também altera a taxa dos itens existentes
-        refresh_snapshots(sale)
+        if recalculates:
+            # trocar o canal também altera a taxa dos itens existentes
+            refresh_snapshots(sale)
         return sale
 
     def to_representation(self, instance):
