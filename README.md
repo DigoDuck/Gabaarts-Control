@@ -2,9 +2,10 @@
 
 API interna de gestão comercial da Gabaarts (produtos personalizados): custos, precificação por canal, vendas e margem de contribuição. Substitui a planilha oficial do negócio. Não é e-commerce.
 
-- **Stack:** Django 5 + DRF + PostgreSQL; Django Admin como interface de cadastro; React (fase 2) para dashboards internos.
+- **Stack:** Django 5 + DRF + PostgreSQL no backend; React + Vite + Tailwind no frontend. O cadastro vive no React; o Admin é fallback técnico e gestão de usuários.
 - **Arquitetura:** [docs/arquitetura.md](docs/arquitetura.md) — modelo de domínio, motor de taxas por canal, precificação e faseamento.
-- **Status:** fase 1 e API DRF da fase 2a implementadas; React entra nas fases 2b e 2c (docs/arquitetura.md §4).
+- **Produto:** [PRODUCT.md](PRODUCT.md) — quem usa, o que cada tela resolve e os não-objetivos.
+- **Status:** fases 1, 2a e 2b concluídas; fase 2c-1 entrega produtos (com kits) e vendas no React. Faltam canais, artesãs, equipamentos, simulador e dashboard (2c-2).
 
 ## Como rodar
 
