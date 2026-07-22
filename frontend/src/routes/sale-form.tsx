@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 
 import { Field, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
-import { ApiError, fieldError, type FieldErrors } from "@/lib/api"
+import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { money } from "@/lib/format"
 import { listChannels, type Channel } from "@/lib/lookups"
 import { listProducts, type Product } from "@/lib/products"
@@ -21,6 +21,19 @@ import {
 type ItemForm = { product: string; qty: string; unit_price: string; unit_freight: string }
 
 const EMPTY_ITEM: ItemForm = { product: "", qty: "1", unit_price: "", unit_freight: "" }
+
+/**
+ * Produto inativo não pode ser vendido, mas venda antiga pode ter um: mantém o
+ * produto da própria linha na lista para o select não aparecer vazio.
+ */
+function productOptions(all: Product[], selected: string) {
+  return all
+    .filter((product) => product.is_active || String(product.id) === selected)
+    .map((product) => ({
+      value: product.id,
+      label: product.is_active ? product.name : `${product.name} (inativo)`,
+    }))
+}
 
 /**
  * Itens mudaram? Compara só o que a usuária digita; unit_cogs/unit_fee são
@@ -70,32 +83,32 @@ export function SaleForm() {
   const [saved, setSaved] = useState<Sale | null>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     listChannels().then(setChannels).catch(() => setChannels([]))
-    // produto inativo não pode ser vendido: o backend rejeita, então nem ofereço
-    listProducts()
-      .then((all) => setProducts(all.filter((product) => product.is_active)))
-      .catch(() => setProducts([]))
+    listProducts().then(setProducts).catch(() => setProducts([]))
   }, [])
 
   useEffect(() => {
     if (!editing) return
-    getSale(Number(id)).then((sale) => {
-      setDate(sale.date)
-      setChannel(String(sale.channel))
-      setCustomer(sale.customer_name)
-      setStatus(sale.status)
-      setSaved(sale)
-      setItems(
-        sale.items.map((item) => ({
-          product: String(item.product),
-          qty: String(item.qty),
-          unit_price: item.unit_price,
-          unit_freight: item.unit_freight ?? "",
-        })),
-      )
-    })
+    getSale(Number(id))
+      .then((sale) => {
+        setDate(sale.date)
+        setChannel(String(sale.channel))
+        setCustomer(sale.customer_name)
+        setStatus(sale.status)
+        setSaved(sale)
+        setItems(
+          sale.items.map((item) => ({
+            product: String(item.product),
+            qty: String(item.qty),
+            unit_price: item.unit_price,
+            unit_freight: item.unit_freight ?? "",
+          })),
+        )
+      })
+      .catch(() => setLoadError(true))
   }, [editing, id])
 
   const setItem = (index: number, patch: Partial<ItemForm>) =>
@@ -108,6 +121,12 @@ export function SaleForm() {
   const submit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault()
+      if (editing && !saved) {
+        // sem a venda carregada não há como saber o que mudou, e cair no create
+        // criaria uma venda nova sem a usuária perceber
+        setErrors({ detail: ["Esta venda não foi carregada. Recarregue a página."] })
+        return
+      }
       setSaving(true)
       setErrors({})
       const payload: SalePayload = {
@@ -145,10 +164,16 @@ export function SaleForm() {
     [channel, customer, date, editing, id, items, navigate, saved, status],
   )
 
-  const geral = fieldError(errors, "non_field_errors") ?? fieldError(errors, "detail")
+  const resumo = summaryErrors(errors)
 
   return (
     <form onSubmit={submit} className="grid max-w-3xl gap-6">
+      {loadError && (
+        <p className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
+          Não foi possível carregar esta venda. Volte à lista e tente de novo.
+        </p>
+      )}
+
       {editing && (
         <p className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted-foreground">
           Alterar canal, itens, preço ou frete recalcula o custo e a taxa desta venda
@@ -157,10 +182,12 @@ export function SaleForm() {
         </p>
       )}
 
-      {geral && (
-        <p className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
-          {geral}
-        </p>
+      {resumo.length > 0 && (
+        <div className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
+          {resumo.map((message, index) => (
+            <p key={index}>{message}</p>
+          ))}
+        </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -214,10 +241,7 @@ export function SaleForm() {
               label="Produto"
               value={item.product}
               placeholder="Escolha um produto"
-              options={products.map((product) => ({
-                value: product.id,
-                label: product.name,
-              }))}
+              options={productOptions(products, item.product)}
               onChange={(event) => setItem(index, { product: event.target.value })}
             />
             <Field

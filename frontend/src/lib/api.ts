@@ -24,6 +24,35 @@ export function fieldError(fields: FieldErrors, name: string): string | undefine
 }
 
 /**
+ * Uma mensagem por erro do 400, achatando as formas que o DRF produz: string
+ * solta, lista de strings e lista de objetos (serializer aninhado, como os
+ * itens da venda). Nenhuma chave pode sumir da tela.
+ */
+export function summaryErrors(errors: FieldErrors): string[] {
+  return Object.entries(errors).flatMap(([field, value]) => messagesFor(field, value))
+}
+
+function messagesFor(field: string, value: unknown): string[] {
+  if (typeof value === "string") return [value]
+  if (!Array.isArray(value)) return [`Verifique o campo ${field}.`]
+
+  const messages: string[] = []
+  value.forEach((entry, index) => {
+    if (typeof entry === "string") {
+      messages.push(entry)
+    } else if (entry && typeof entry === "object") {
+      // serializer aninhado: {campo: ["mensagem"]} na posição do item
+      Object.entries(entry as Record<string, unknown>).forEach(([inner, nested]) => {
+        for (const message of messagesFor(inner, nested)) {
+          messages.push(`Item ${index + 1}: ${message}`)
+        }
+      })
+    }
+  })
+  return messages.length > 0 ? messages : [`Verifique o campo ${field}.`]
+}
+
+/**
  * Único caminho até a API autenticada: injeta o token e trata 401.
  * Dinheiro chega como string ("15.16") e continua string até a formatação.
  */

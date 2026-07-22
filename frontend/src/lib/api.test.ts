@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest"
 
-import { ApiError, apiFetch, fieldError } from "@/lib/api"
+import { ApiError, apiFetch, fieldError, summaryErrors } from "@/lib/api"
 import { useAuth } from "@/store/auth"
 
 beforeEach(() => {
@@ -54,4 +54,18 @@ test("erro sem corpo JSON não quebra o parse", async () => {
   const error = await apiFetch("/api/products/").catch((caught) => caught)
 
   expect((error as ApiError).fields).toEqual({})
+})
+
+test("summaryErrors achata string solta, lista de strings e itens aninhados", () => {
+  const messages = summaryErrors({
+    detail: "Sessão expirada.",
+    maker: ["Produto com tempo de produção precisa de artesã."],
+    items: [{ unit_price: ["Preço deve ser maior que zero."] }, {}],
+  })
+
+  expect(messages).toEqual([
+    "Sessão expirada.",
+    "Produto com tempo de produção precisa de artesã.",
+    "Item 1: Preço deve ser maior que zero.",
+  ])
 })

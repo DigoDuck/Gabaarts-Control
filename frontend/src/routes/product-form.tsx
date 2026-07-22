@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 
 import { Field, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
-import { ApiError, fieldError, type FieldErrors } from "@/lib/api"
+import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { fractionToPercent, money, percentToFraction } from "@/lib/format"
 import { listMakers, type Maker } from "@/lib/lookups"
 import {
@@ -70,17 +70,6 @@ function toPayload(form: FormState): ProductPayload {
     // desmarcar "é kit" com componentes na tela não pode enviá-los mesmo assim
     combo_items: form.is_combo ? form.combo_items : [],
   }
-}
-
-/**
- * Todo erro do 400 aparece no resumo do topo, inclusive os que também saem sob
- * o campo. Chave sem input na tela (is_combo, combo_items) sumiria sem isto, e
- * num formulário longo o campo com erro pode estar fora da área visível.
- */
-function summaryErrors(errors: FieldErrors): string[] {
-  return Object.keys(errors).map(
-    (key) => fieldError(errors, key) ?? `Verifique o campo ${key}.`,
-  )
 }
 
 export function ProductForm() {
