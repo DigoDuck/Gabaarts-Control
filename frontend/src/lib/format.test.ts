@@ -22,3 +22,9 @@ test("money e percent continuam formatando em pt-BR", () => {
   expect(money("15.16")).toContain("15,16")
   expect(percent("0.5000")).toContain("50")
 })
+
+test("fração que não multiplica limpo não vaza ruído de ponto flutuante", () => {
+  expect(fractionToPercent("0.1400")).toBe("14")
+  expect(fractionToPercent("0.2900")).toBe("29")
+  expect(fractionToPercent("0.0350")).toBe("3.5")
+})
