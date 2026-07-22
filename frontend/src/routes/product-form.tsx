@@ -64,6 +64,17 @@ function toPayload(form: FormState): ProductPayload {
   }
 }
 
+/**
+ * Todo erro do 400 aparece no resumo do topo, inclusive os que também saem sob
+ * o campo. Chave sem input na tela (is_combo, combo_items) sumiria sem isto, e
+ * num formulário longo o campo com erro pode estar fora da área visível.
+ */
+function summaryErrors(errors: FieldErrors): string[] {
+  return Object.keys(errors).map(
+    (key) => fieldError(errors, key) ?? `Verifique o campo ${key}.`,
+  )
+}
+
 export function ProductForm() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -146,15 +157,17 @@ export function ProductForm() {
     [editing, form, id, navigate],
   )
 
-  const geral = fieldError(errors, "non_field_errors") ?? fieldError(errors, "detail")
+  const resumo = summaryErrors(errors)
 
   return (
     <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="grid gap-4 content-start">
-        {geral && (
-          <p className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
-            {geral}
-          </p>
+        {resumo.length > 0 && (
+          <div className="rounded-md border border-destructive/40 px-3 py-2 text-sm text-danger-ink">
+            {resumo.map((message, index) => (
+              <p key={index}>{message}</p>
+            ))}
+          </div>
         )}
 
         <Field
@@ -269,6 +282,7 @@ export function ProductForm() {
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
+            name="is_active"
             checked={form.is_active}
             onChange={(event) => set("is_active", event.target.checked)}
           />
