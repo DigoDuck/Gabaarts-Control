@@ -10,9 +10,12 @@ import {
   CATEGORY_OPTIONS,
   createProduct,
   getProduct,
+  listProducts,
   previewProduct,
   updateProduct,
+  type ComboItem,
   type CostPreview,
+  type Product,
   type ProductPayload,
 } from "@/lib/products"
 
@@ -30,6 +33,8 @@ type FormState = {
   maker: string
   target_margin_pct: string
   base_price: string
+  is_combo: boolean
+  combo_items: ComboItem[]
 }
 
 const EMPTY: FormState = {
@@ -44,6 +49,8 @@ const EMPTY: FormState = {
   maker: "",
   target_margin_pct: "50",
   base_price: "",
+  is_combo: false,
+  combo_items: [],
 }
 
 function toPayload(form: FormState): ProductPayload {
@@ -51,7 +58,7 @@ function toPayload(form: FormState): ProductPayload {
     name: form.name,
     category: form.category as ProductPayload["category"],
     is_active: form.is_active,
-    is_combo: false,
+    is_combo: form.is_combo,
     material_cost: form.material_cost || "0",
     packaging_cost: form.packaging_cost || "0",
     waste_pct: percentToFraction(form.waste_pct),
@@ -60,7 +67,8 @@ function toPayload(form: FormState): ProductPayload {
     maker: form.maker ? Number(form.maker) : null,
     target_margin_pct: percentToFraction(form.target_margin_pct),
     base_price: form.base_price || null,
-    combo_items: [],
+    // desmarcar "é kit" com componentes na tela não pode enviá-los mesmo assim
+    combo_items: form.is_combo ? form.combo_items : [],
   }
 }
 
@@ -109,9 +117,24 @@ export function ProductForm() {
         maker: product.maker ? String(product.maker) : "",
         target_margin_pct: fractionToPercent(product.target_margin_pct),
         base_price: product.base_price ?? "",
+        is_combo: product.is_combo,
+        combo_items: product.combo_items,
       }),
     )
   }, [editing, id])
+
+  const [components, setComponents] = useState<Product[]>([])
+
+  useEffect(() => {
+    // kit dentro de kit é bloqueado no backend; nem oferecer na lista
+    listProducts()
+      .then((all) =>
+        setComponents(
+          all.filter((item) => !item.is_combo && String(item.id) !== id),
+        ),
+      )
+      .catch(() => setComponents([]))
+  }, [id])
 
   // preview com debounce: enquanto a resposta não chega os números anteriores
   // ficam esmaecidos, para o painel não piscar a cada tecla.
@@ -288,6 +311,102 @@ export function ProductForm() {
           />
           Produto ativo
         </label>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.is_combo}
+            onChange={(event) => set("is_combo", event.target.checked)}
+          />
+          É um kit (soma o custo dos componentes)
+        </label>
+
+        {fieldError(errors, "is_combo") && (
+          <p className="text-xs text-danger-ink">{fieldError(errors, "is_combo")}</p>
+        )}
+
+        {form.is_combo && (
+          <fieldset className="grid gap-3 rounded-lg border border-border p-4">
+            <legend className="px-1 text-sm text-muted-foreground">Componentes</legend>
+
+            {form.combo_items.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nenhum componente. O custo do kit é só o dele mesmo.
+              </p>
+            )}
+
+            {form.combo_items.map((item, index) => (
+              <div key={index} className="flex items-end gap-2">
+                <div className="flex-1">
+                  <SelectField
+                    label="Produto"
+                    value={String(item.component)}
+                    placeholder="Escolha um produto"
+                    options={components.map((product) => ({
+                      value: product.id,
+                      label: product.name,
+                    }))}
+                    onChange={(event) =>
+                      set(
+                        "combo_items",
+                        form.combo_items.map((current, position) =>
+                          position === index
+                            ? { ...current, component: Number(event.target.value) }
+                            : current,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+                <div className="w-24">
+                  <Field
+                    label="Qtd"
+                    type="number"
+                    min="1"
+                    value={String(item.qty)}
+                    onChange={(event) =>
+                      set(
+                        "combo_items",
+                        form.combo_items.map((current, position) =>
+                          position === index
+                            ? { ...current, qty: Number(event.target.value || 1) }
+                            : current,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    set(
+                      "combo_items",
+                      form.combo_items.filter((_, position) => position !== index),
+                    )
+                  }
+                >
+                  Remover
+                </Button>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-self-start"
+              disabled={components.length === 0}
+              onClick={() =>
+                set("combo_items", [
+                  ...form.combo_items,
+                  { component: components[0].id, qty: 1 },
+                ])
+              }
+            >
+              Adicionar componente
+            </Button>
+          </fieldset>
+        )}
 
         <div className="flex gap-2">
           <Button type="submit" disabled={saving}>
