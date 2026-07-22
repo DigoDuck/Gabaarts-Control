@@ -26,6 +26,14 @@ from .services.pricing import suggested_price
 from .services.sales import refresh_snapshots
 
 
+def cost_payload(cogs, margin):
+    """Formato único do custo na API: quem exibe COGS lê deste lugar."""
+    return {
+        "cogs": {key: str(q2(value)) for key, value in cogs.items()},
+        "suggested_price": str(suggested_price(cogs["total"], margin)),
+    }
+
+
 class ModelCleanMixin:
     """Executa o clean() do model dentro do serializer."""
 
@@ -169,10 +177,7 @@ class ProductSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeri
         # calcula o COGS uma vez e reaproveita a precisão cheia no preço sugerido
         data = super().to_representation(instance)
         cogs = unit_cogs(instance)
-        data["cogs"] = {key: str(q2(value)) for key, value in cogs.items()}
-        data["suggested_price"] = str(
-            suggested_price(cogs["total"], instance.target_margin_pct)
-        )
+        data.update(cost_payload(cogs, instance.target_margin_pct))
         return data
 
 
@@ -239,7 +244,12 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
     def update(self, instance, validated_data):
         # snapshot só é refeito quando o payload mexe no que entra na conta.
         # Verificar ANTES do super(): NestedWriteMixin.update consome "items".
-        recalculates = "channel" in validated_data or "items" in validated_data
+        # "mudou", não "veio no payload": um PUT que reenvia o mesmo canal não
+        # pode re-precificar uma venda antiga (mesma regra do SaleAdmin)
+        recalculates = (
+            validated_data.get("channel", instance.channel) != instance.channel
+            or "items" in validated_data
+        )
         sale = super().update(instance, validated_data)
         if recalculates:
             # trocar o canal também altera a taxa dos itens existentes

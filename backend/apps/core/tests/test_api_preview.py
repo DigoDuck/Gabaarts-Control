@@ -81,3 +81,17 @@ def test_preview_rejeita_valor_nao_numerico(api):
     )
     assert response.status_code == 400
     assert "material_cost" in response.json()
+
+
+def test_preview_ignora_componente_em_branco(api):
+    response = api.post(
+        "/api/products/preview/",
+        {"name": "Kit", "is_combo": True, "combo_items": [{"qty": 2}]},
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    assert response.json()["cogs"]["total"] == "0.00"
+
+
+def test_preview_exige_autenticacao(anon):
+    assert anon.post("/api/products/preview/", {}, format="json").status_code == 401

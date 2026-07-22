@@ -89,9 +89,8 @@ def test_admin_nao_reescreve_snapshot_em_edicao_sem_efeito_no_calculo(admin_clie
             "items-0-unit_price": "40.00",
             "items-0-unit_freight": "0.00",
         },
-        follow=True,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 302, response.content  # 200 = formulário voltou com erro
     item.refresh_from_db()
     assert item.unit_cogs == Decimal("15.16")

@@ -21,9 +21,10 @@ from .serializers import (
     SaleSerializer,
     SimulateInputSerializer,
     TargetPriceInputSerializer,
+    cost_payload,
 )
-from .services.costing import q2, unit_cogs
-from .services.pricing import simulate, suggested_price, target_price
+from .services.costing import unit_cogs
+from .services.pricing import simulate, target_price
 from .services.reports import sales_summary
 
 
@@ -85,17 +86,13 @@ class ProductViewSet(viewsets.ModelViewSet):
         items = [
             ComboItem(component=item["component"], qty=item.get("qty", 1))
             for item in data.pop("combo_items", [])
+            # partial=True não exige component dentro do item: linha em branco
+            # do rascunho não pode virar 500
+            if item.get("component") is not None
         ]
         draft = Product(**data)
         cogs = unit_cogs(draft, combo_items=items)
-        return Response(
-            {
-                "cogs": {key: str(q2(value)) for key, value in cogs.items()},
-                "suggested_price": str(
-                    suggested_price(cogs["total"], draft.target_margin_pct)
-                ),
-            }
-        )
+        return Response(cost_payload(cogs, draft.target_margin_pct))
 
 
 class SaleViewSet(viewsets.ModelViewSet):

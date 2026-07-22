@@ -117,6 +117,22 @@ def test_canal_nao_numerico_no_filtro_devolve_400(api):
     assert "channel" in response.json()
 
 
+def test_reenviar_o_mesmo_canal_nao_reescreve_snapshot(api, caneca):
+    sale = nova_venda(api, caneca).json()
+    maker = Maker.objects.get(name="Filha")
+    maker.hourly_rate = Decimal("50.00")
+    maker.save()
+
+    response = api.patch(
+        f"/api/sales/{sale['id']}/",
+        {"channel": sale["channel"], "customer_name": "Romilda"},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.content
+    assert response.json()["items"][0]["unit_cogs"] == "15.16"
+
+
 def test_editar_campo_sem_efeito_no_calculo_nao_reescreve_snapshot(api, caneca):
     # corrigir o nome do cliente não pode re-precificar uma venda passada
     sale = nova_venda(api, caneca).json()
