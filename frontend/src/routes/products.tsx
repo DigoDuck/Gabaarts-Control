@@ -110,8 +110,18 @@ export function Products() {
               : state.products.map((product) => (
                   <TableRow
                     key={product.id}
-                    className="cursor-pointer"
+                    className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-violet"
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Editar ${product.name}`}
                     onClick={() => navigate(`/products/${product.id}`)}
+                    onKeyDown={(event) => {
+                      // linha da tabela não é botão nativo: Enter e Espaço na mão
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        navigate(`/products/${product.id}`)
+                      }
+                    }}
                   >
                     <TableCell className="font-medium">
                       <span className="inline-flex items-center gap-2">

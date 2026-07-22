@@ -28,8 +28,9 @@ export function Sales() {
 
   const load = useCallback(() => {
     setState({ status: "loading" })
-    // a API exige from e to juntos; um só preenchido não filtra nada
-    const range = from && to ? { from, to } : {}
+    // from e to são independentes na API de vendas: cada um filtra sozinho
+    // (é o endpoint de relatórios que exige os dois juntos, não este)
+    const range = { ...(from && { from }), ...(to && { to }) }
     listSales(range)
       .then((sales) => setState({ status: "ready", sales }))
       .catch(() => setState({ status: "error" }))
@@ -119,8 +120,18 @@ export function Sales() {
                 : state.sales.map((sale) => (
                     <TableRow
                       key={sale.id}
-                      className="cursor-pointer"
+                      className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-violet"
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Abrir venda de ${sale.date.split("-").reverse().join("/")}`}
                       onClick={() => navigate(`/sales/${sale.id}`)}
+                      onKeyDown={(event) => {
+                        // linha da tabela não é botão nativo: Enter e Espaço na mão
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          navigate(`/sales/${sale.id}`)
+                        }
+                      }}
                     >
                       <TableCell className="tabular-nums">
                         {sale.date.split("-").reverse().join("/")}
