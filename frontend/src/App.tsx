@@ -4,6 +4,7 @@ import { AppShell, NAV } from "@/components/app-shell"
 import { Login } from "@/routes/login"
 import { ProductForm } from "@/routes/product-form"
 import { Products } from "@/routes/products"
+import { Sales } from "@/routes/sales"
 import { Tokens } from "@/routes/tokens"
 
 // rotas da 2c: o shell já navega para elas antes das telas existirem
@@ -21,7 +22,8 @@ export default function App() {
           <Route path="/products" element={<Products />} />
           <Route path="/products/new" element={<ProductForm />} />
           <Route path="/products/:id" element={<ProductForm />} />
-          {NAV.filter((item) => item.to !== "/products").map((item) => (
+          <Route path="/sales" element={<Sales />} />
+          {NAV.filter((item) => !["/products", "/sales"].includes(item.to)).map((item) => (
             <Route key={item.to} path={item.to} element={<Soon />} />
           ))}
         </Route>
