@@ -14,11 +14,16 @@ def q2(value):
     return value.quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
-def unit_cogs(product):
+def unit_cogs(product, combo_items=None):
     """COGS unitário com breakdown: {material, labor, packaging, total}.
 
     material inclui a perda (material × (1 + waste_pct), só sobre material — A4);
     mão de obra = tempo × custo_hora ÷ 60 ÷ lote; kit soma os componentes (§1.4).
+
+    combo_items: componentes já em memória. O preview calcula sobre um Product
+    sem pk, onde o related manager não existe; sem esse parâmetro a agregação
+    do kit teria de ser reescrita fora daqui, e a fórmula deixaria de ter um
+    único dono.
     """
     material = product.material_cost * (1 + product.waste_pct)
     rate = product.maker.hourly_rate if product.maker else Decimal("0")
@@ -26,7 +31,9 @@ def unit_cogs(product):
     packaging = product.packaging_cost
 
     if product.is_combo:
-        for item in product.combo_items.select_related("component__maker").all():
+        if combo_items is None:
+            combo_items = product.combo_items.select_related("component__maker").all()
+        for item in combo_items:
             comp = unit_cogs(item.component)  # profundidade 1: kit de kit é bloqueado no clean()
             material += item.qty * comp["material"]
             labor += item.qty * comp["labor"]

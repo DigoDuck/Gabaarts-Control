@@ -4,24 +4,26 @@ from datetime import date
 
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Channel, Equipment, Maker, Product, Sale
+from .models import Channel, ComboItem, Equipment, Maker, Product, Sale
 from .serializers import (
     ChannelFeeTierSerializer,
     ChannelSerializer,
     EquipmentSerializer,
     MakerSerializer,
     PCT,
+    ProductPreviewSerializer,
     ProductSerializer,
     SaleSerializer,
     SimulateInputSerializer,
     TargetPriceInputSerializer,
 )
-from .services.costing import unit_cogs
-from .services.pricing import simulate, target_price
+from .services.costing import q2, unit_cogs
+from .services.pricing import simulate, suggested_price, target_price
 from .services.reports import sales_summary
 
 
@@ -69,6 +71,31 @@ class ProductViewSet(viewsets.ModelViewSet):
         .order_by("name")
     )
     serializer_class = ProductSerializer
+
+    @action(detail=False, methods=["post"])
+    def preview(self, request):
+        """COGS e preço sugerido de um rascunho, sem gravar nada.
+
+        partial=True porque rascunho é incompleto por natureza: os campos
+        ausentes caem no default do model.
+        """
+        payload = ProductPreviewSerializer(data=request.data, partial=True)
+        payload.is_valid(raise_exception=True)
+        data = dict(payload.validated_data)
+        items = [
+            ComboItem(component=item["component"], qty=item.get("qty", 1))
+            for item in data.pop("combo_items", [])
+        ]
+        draft = Product(**data)
+        cogs = unit_cogs(draft, combo_items=items)
+        return Response(
+            {
+                "cogs": {key: str(q2(value)) for key, value in cogs.items()},
+                "suggested_price": str(
+                    suggested_price(cogs["total"], draft.target_margin_pct)
+                ),
+            }
+        )
 
 
 class SaleViewSet(viewsets.ModelViewSet):

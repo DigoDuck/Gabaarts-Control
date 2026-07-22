@@ -176,6 +176,18 @@ class ProductSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeri
         return data
 
 
+class ProductPreviewSerializer(ProductSerializer):
+    """Mesmos campos do produto, sem as regras de coerência entre campos.
+
+    Validação de campo (tipo, casas decimais, faixas) continua valendo; só o
+    clean() do model sai. Um rascunho com tempo de produção e ainda sem artesã
+    é inválido para salvar e perfeitamente calculável para exibir.
+    """
+
+    def validate(self, attrs):
+        return attrs
+
+
 class SaleItemSerializer(ModelCleanMixin, serializers.ModelSerializer):
     # snapshots são calculados por services/sales, nunca digitados pelo cliente
     product_name = serializers.CharField(source="product.name", read_only=True)
