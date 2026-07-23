@@ -98,6 +98,10 @@ lucro_unit = unit_price − unit_cogs − unit_fee − unit_freight
 - Editar uma venda recalcula os snapshots daquela venda, explicitamente.
 - Sem versionamento de taxas (`valid_from`): o snapshot já preserva o histórico que importa.
 
+Refinado em 22/07/2026 (fase 2c-1): a edição só refaz o snapshot quando o payload
+altera canal ou itens. Corrigir cliente, data ou situação de uma venda antiga não
+re-precifica a venda com os parâmetros de hoje.
+
 ### 1.4 Kits (combos)
 
 Kit é `Product` com `is_combo=True` e 2+ `ComboItem`. Custo do kit:

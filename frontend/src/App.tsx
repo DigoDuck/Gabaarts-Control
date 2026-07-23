@@ -2,7 +2,10 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { AppShell, NAV } from "@/components/app-shell"
 import { Login } from "@/routes/login"
+import { ProductForm } from "@/routes/product-form"
 import { Products } from "@/routes/products"
+import { SaleForm } from "@/routes/sale-form"
+import { Sales } from "@/routes/sales"
 import { Tokens } from "@/routes/tokens"
 
 // rotas da 2c: o shell já navega para elas antes das telas existirem
@@ -18,7 +21,12 @@ export default function App() {
         <Route path="/tokens" element={<Tokens />} />
         <Route element={<AppShell />}>
           <Route path="/products" element={<Products />} />
-          {NAV.filter((item) => item.to !== "/products").map((item) => (
+          <Route path="/products/new" element={<ProductForm />} />
+          <Route path="/products/:id" element={<ProductForm />} />
+          <Route path="/sales" element={<Sales />} />
+          <Route path="/sales/new" element={<SaleForm />} />
+          <Route path="/sales/:id" element={<SaleForm />} />
+          {NAV.filter((item) => !["/products", "/sales"].includes(item.to)).map((item) => (
             <Route key={item.to} path={item.to} element={<Soon />} />
           ))}
         </Route>

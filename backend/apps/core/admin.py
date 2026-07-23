@@ -79,6 +79,9 @@ class ChannelAdmin(admin.ModelAdmin):
 class SaleItemInline(admin.TabularInline):
     model = SaleItem
     extra = 1
+    # venda sem item não tem receita nem lucro; o serializer barra na API e o
+    # Admin (fallback técnico) barra aqui
+    min_num = 1
     fields = ["product", "qty", "unit_price", "unit_freight",
               "unit_cogs", "unit_fee", "unit_profit_display", "status_vs_target"]
     readonly_fields = ["unit_cogs", "unit_fee", "unit_profit_display", "status_vs_target"]
@@ -110,9 +113,15 @@ class SaleAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related("channel").prefetch_related("items")
 
     def save_related(self, request, form, formsets, change):
-        # snapshot automático DEPOIS dos itens salvos; editar recalcula (arquitetura §1.3)
+        # mesma regra da API (serializers.SaleSerializer.update): o snapshot só
+        # é refeito quando a edição mexe no que entra na conta. Corrigir cliente
+        # ou situação não pode re-precificar uma venda antiga.
+        recalculates = "channel" in form.changed_data or any(
+            formset.has_changed() for formset in formsets
+        )
         super().save_related(request, form, formsets, change)
-        refresh_snapshots(form.instance)
+        if not change or recalculates:
+            refresh_snapshots(form.instance)
 
     @admin.display(description="total (R$)")
     def total_display(self, obj):
