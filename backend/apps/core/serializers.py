@@ -167,9 +167,22 @@ class ProductSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeri
         is_combo = attrs.get(
             "is_combo", self.instance.is_combo if self.instance else False
         )
-        if attrs.get("combo_items") and not is_combo:
+        # combo_items no payload substitui os existentes; ausente na edição mantém
+        if "combo_items" in attrs:
+            items = attrs["combo_items"]
+        elif self.instance is not None:
+            items = list(self.instance.combo_items.all())
+        else:
+            items = []
+        if items and not is_combo:
             raise serializers.ValidationError(
                 {"combo_items": "Só um produto marcado como kit pode ter componentes."}
+            )
+        # arquitetura §1.4: kit é is_combo=True com 2+ componentes. Kit vazio ou
+        # de um item só é a bagunça de combos que o sistema nasceu para corrigir.
+        if is_combo and len(items) < 2:
+            raise serializers.ValidationError(
+                {"is_combo": "Um kit precisa de pelo menos dois componentes."}
             )
         return attrs
 
@@ -240,21 +253,70 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
         refresh_snapshots(sale)
         return sale
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # venda é derivada dos itens: sem item não há receita nem lucro. A API é
+        # o trust boundary — o front já barra, mas um script não pode criar nem
+        # esvaziar uma venda por aqui (arquitetura §1, "não existe item avulso").
+        creating = self.instance is None
+        if creating and not attrs.get("items"):
+            raise serializers.ValidationError(
+                {"items": "A venda precisa de ao menos um item."}
+            )
+        if not creating and "items" in attrs and not attrs["items"]:
+            raise serializers.ValidationError(
+                {"items": "A venda precisa de ao menos um item."}
+            )
+        return attrs
+
     @transaction.atomic
     def update(self, instance, validated_data):
-        # snapshot só é refeito quando o payload mexe no que entra na conta.
-        # Verificar ANTES do super(): NestedWriteMixin.update consome "items".
-        # "mudou", não "veio no payload": um PUT que reenvia o mesmo canal não
-        # pode re-precificar uma venda antiga (mesma regra do SaleAdmin)
-        recalculates = (
+        # snapshot só é refeito quando o payload ALTERA canal ou itens, não quando
+        # eles apenas vêm no corpo (arquitetura §1.3). Verificar ANTES do super():
+        # NestedWriteMixin.update consome "items".
+        channel_changed = (
             validated_data.get("channel", instance.channel) != instance.channel
-            or "items" in validated_data
         )
+        items_changed = "items" in validated_data and self._items_changed(
+            instance, validated_data["items"]
+        )
+        # itens idênticos NÃO podem ser reescritos: o delete+recreate do
+        # NestedWriteMixin recongelaria o snapshot com os parâmetros de hoje.
+        # Tirar "items" do payload evita o rewrite; refresh_snapshots ainda roda
+        # nas linhas atuais se o canal mudou.
+        if "items" in validated_data and not items_changed:
+            validated_data.pop("items")
         sale = super().update(instance, validated_data)
-        if recalculates:
-            # trocar o canal também altera a taxa dos itens existentes
+        if channel_changed or items_changed:
             refresh_snapshots(sale)
         return sale
+
+    @staticmethod
+    def _items_changed(instance, incoming):
+        """Compara os itens do payload com os salvos, posição a posição.
+
+        Só o que a usuária digita entra na conta (produto, qtd, preço, frete);
+        unit_cogs/unit_fee são congelados e não. Comparação posicional espelha
+        o diff do front (sale-form.tsx); reordenar conta como mudança.
+        """
+        existing = list(instance.items.all())
+        if len(existing) != len(incoming):
+            return True
+        # frete None no payload = "usar o padrão do canal", que é o que ficou
+        # congelado na linha; resolver antes de comparar evita falso positivo
+        default_freight = instance.channel.default_freight or Decimal("0")
+        for old, new in zip(existing, incoming):
+            freight = new.get("unit_freight")
+            if freight is None:
+                freight = default_freight
+            if (
+                old.product_id != new["product"].pk
+                or old.qty != new["qty"]
+                or old.unit_price != new["unit_price"]
+                or old.unit_freight != freight
+            ):
+                return True
+        return False
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

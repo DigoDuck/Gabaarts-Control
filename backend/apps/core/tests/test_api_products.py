@@ -102,6 +102,7 @@ def test_kit_dentro_de_kit_e_rejeitado(api):
 
 def test_update_substitui_os_componentes(api, caneca):
     keychain = Product.objects.create(name="Chaveiro", material_cost=Decimal("2.50"))
+    magnet = Product.objects.create(name="Ímã", material_cost=Decimal("2.70"))
     combo = api.post(
         "/api/products/",
         {
@@ -114,15 +115,46 @@ def test_update_substitui_os_componentes(api, caneca):
         },
         format="json",
     ).json()
+    # substitui os dois por outros dois: kit continua com 2+ (arquitetura §1.4)
     response = api.patch(
         f"/api/products/{combo['id']}/",
-        {"combo_items": [{"component": keychain.pk, "qty": 3}]},
+        {
+            "combo_items": [
+                {"component": keychain.pk, "qty": 3},
+                {"component": magnet.pk, "qty": 2},
+            ]
+        },
         format="json",
     )
     assert response.status_code == 200, response.content
     body = response.json()
-    assert len(body["combo_items"]) == 1
-    assert body["combo_items"][0]["qty"] == 3
+    qtys = {item["component"]: item["qty"] for item in body["combo_items"]}
+    assert qtys == {keychain.pk: 3, magnet.pk: 2}
+
+
+def test_kit_com_um_componente_e_rejeitado(api, caneca):
+    keychain = Product.objects.create(name="Chaveiro", material_cost=Decimal("2.50"))
+    response = api.post(
+        "/api/products/",
+        {
+            "name": "Kit magro",
+            "is_combo": True,
+            "combo_items": [{"component": keychain.pk, "qty": 1}],
+        },
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "is_combo" in response.json()
+
+
+def test_kit_sem_componentes_e_rejeitado(api):
+    response = api.post(
+        "/api/products/",
+        {"name": "Kit vazio", "is_combo": True, "combo_items": []},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "is_combo" in response.json()
 
 
 def test_margem_alvo_de_100_pct_e_rejeitada(api):

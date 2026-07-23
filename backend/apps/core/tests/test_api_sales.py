@@ -80,7 +80,8 @@ def test_venda_traz_total_e_lucro(api, caneca):
     assert body["profit"] == "25.68"
 
 
-def test_venda_com_lista_vazia_de_itens_e_criavel(api):
+def test_venda_sem_itens_e_rejeitada(api):
+    # venda é derivada dos itens; a API é o trust boundary (arquitetura §1)
     response = api.post(
         "/api/sales/",
         {
@@ -90,8 +91,58 @@ def test_venda_com_lista_vazia_de_itens_e_criavel(api):
         },
         format="json",
     )
-    assert response.status_code == 201, response.content
-    assert response.json()["total"] == "0.00"
+    assert response.status_code == 400
+    assert "items" in response.json()
+
+
+def test_reenviar_itens_identicos_nao_reescreve_snapshot(api, caneca):
+    # um cliente/script que reenvie a lista inteira sem mudar nada não pode
+    # re-precificar a venda com os parâmetros de hoje (arquitetura §1.3)
+    sale = nova_venda(api, caneca).json()
+    item = sale["items"][0]
+    maker = Maker.objects.get(name="Filha")
+    maker.hourly_rate = Decimal("50.00")
+    maker.save()
+
+    response = api.patch(
+        f"/api/sales/{sale['id']}/",
+        {
+            "items": [
+                {
+                    "product": item["product"],
+                    "qty": item["qty"],
+                    "unit_price": item["unit_price"],
+                    "unit_freight": item["unit_freight"],
+                }
+            ]
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    assert response.json()["items"][0]["unit_cogs"] == "15.16"
+
+
+def test_mudar_preco_de_um_item_reescreve_snapshot(api, caneca):
+    sale = nova_venda(api, caneca).json()
+    item = sale["items"][0]
+    response = api.patch(
+        f"/api/sales/{sale['id']}/",
+        {
+            "items": [
+                {
+                    "product": item["product"],
+                    "qty": item["qty"],
+                    "unit_price": "50.00",
+                    "unit_freight": item["unit_freight"],
+                }
+            ]
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    assert body["items"][0]["unit_price"] == "50.00"
+    assert body["total"] == "50.00"
 
 
 def test_filtro_por_periodo_e_canal(api, caneca):

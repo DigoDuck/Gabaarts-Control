@@ -332,9 +332,9 @@ export function ProductForm() {
           <fieldset className="grid gap-3 rounded-lg border border-border p-4">
             <legend className="px-1 text-sm text-muted-foreground">Componentes</legend>
 
-            {form.combo_items.length === 0 && (
+            {form.combo_items.length < 2 && (
               <p className="text-sm text-muted-foreground">
-                Nenhum componente. O custo do kit é só o dele mesmo.
+                Um kit precisa de pelo menos dois componentes.
               </p>
             )}
 

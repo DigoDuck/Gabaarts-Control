@@ -79,6 +79,9 @@ class ChannelAdmin(admin.ModelAdmin):
 class SaleItemInline(admin.TabularInline):
     model = SaleItem
     extra = 1
+    # venda sem item não tem receita nem lucro; o serializer barra na API e o
+    # Admin (fallback técnico) barra aqui
+    min_num = 1
     fields = ["product", "qty", "unit_price", "unit_freight",
               "unit_cogs", "unit_fee", "unit_profit_display", "status_vs_target"]
     readonly_fields = ["unit_cogs", "unit_fee", "unit_profit_display", "status_vs_target"]
