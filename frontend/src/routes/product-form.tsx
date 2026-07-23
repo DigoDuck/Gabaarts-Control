@@ -5,7 +5,7 @@ import { Field, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { fractionToPercent, money, percentToFraction } from "@/lib/format"
-import { listMakers, type Maker } from "@/lib/lookups"
+import { listMakers, type Maker } from "@/lib/makers"
 import {
   CATEGORY_OPTIONS,
   createProduct,
@@ -84,6 +84,9 @@ export function ProductForm() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState(false)
+  // enquanto o GET não volta, o form ainda mostra os vazios de EMPTY; salvar
+  // aqui gravaria vazio por cima do dado real, porque o PUT escreve tudo
+  const [loading, setLoading] = useState(editing)
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }))
@@ -93,7 +96,11 @@ export function ProductForm() {
   }, [])
 
   useEffect(() => {
-    if (!editing) return
+    if (!editing) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     getProduct(Number(id))
       .then((product) =>
         setForm({
@@ -113,6 +120,7 @@ export function ProductForm() {
         }),
       )
       .catch(() => setLoadError(true))
+      .finally(() => setLoading(false))
   }, [editing, id])
 
   const [components, setComponents] = useState<Product[]>([])
@@ -412,8 +420,8 @@ export function ProductForm() {
         )}
 
         <div className="flex gap-2">
-          <Button type="submit" disabled={saving}>
-            {saving ? "Salvando…" : "Salvar"}
+          <Button type="submit" disabled={saving || loading}>
+            {saving ? "Salvando…" : loading ? "Carregando…" : "Salvar"}
           </Button>
           <Button type="button" variant="outline" onClick={() => navigate("/products")}>
             Cancelar
