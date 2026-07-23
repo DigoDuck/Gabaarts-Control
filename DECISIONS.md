@@ -101,3 +101,17 @@ Gatilho de revisão: ...
 **Justificativa:** A skill `impeccable`, prevista no DESIGN.md como etapa 3 do pipeline de frontend, exige o arquivo. Independente dela, a fase 2c é a primeira com contexto de produto real que não cabe nos outros arquivos: a usuária principal é não-técnica e isso muda decisão de UI (idioma, texto de erro, mobile), mas não é regra de domínio nem token visual.
 **Trade-off aceito:** Mais um arquivo para manter em dia; o #005 alerta que documentação de agente desatualizada é pior que nenhuma.
 **Gatilho de revisão:** Se o PRODUCT.md passar a fase 2 inteira sem ser atualizado, ou se virar cópia do README, ele é cortado e o #005 volta a valer sem exceção.
+
+## #012 — Fase 2c-2 inclui os CRUDs de canais, artesãs e equipamentos · 2026-07 · Status: Ativa
+
+**Decisão:** As três telas de cadastro (canais/faixas, artesãs, equipamentos) entram no React na 2c-2. Isso **reverte** o "não entra, fica no Admin (YAGNI)" registrado na spec da fatia (`docs/superpowers/specs/2026-07-22-fase2c2-*-design.md`), que foi atualizada para refletir esta decisão.
+**Justificativa:** O `PRODUCT.md` — documento versionado no git — já listava as três telas como fase 2c-2, enquanto a spec (em diretório gitignored) as excluía. Divergência encontrada durante a review da fatia, decidida pelo Diogo em 23/07/2026 com o código já implementado e coberto por build e testes.
+**Trade-off aceito:** Nove arquivos a mais para manter, e o Admin deixa de ser o único caminho dessas entidades. O YAGNI da spec era defensável: essas entidades mudam raramente.
+**Gatilho de revisão:** Se as três telas atravessarem a fase 3 sem uso real, voltam a ser exclusividade do Admin.
+
+## #013 — Recharts dispensado no dashboard; quebra por canal em barras CSS · 2026-07 · Status: Ativa
+
+**Decisão:** A quebra por canal do dashboard usa barras CSS puras. `recharts` **não** é instalado, contrariando a spec da 2c-2, que o registrava como a única dependência nova da fatia.
+**Justificativa:** Cinco canais em barra horizontal não justificam uma lib de gráfico. A própria spec listava "Recharts renderiza cor fora dos tokens (viola DESIGN.md)" como risco a mitigar — risco que deixa de existir sem a lib. Zero KB de bundle e nenhuma cor fora de token.
+**Trade-off aceito:** A lib não fica "pronta para visualizações futuras", que era parte da intenção original; a primeira visualização com eixo ou série temporal vai pagar o custo de instalá-la.
+**Gatilho de revisão:** Primeira visualização que precise de eixo, tooltip, série temporal ou interação — aí a lib entra com propósito, e a barra CSS não escala.
