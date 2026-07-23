@@ -5,7 +5,7 @@ import { Field, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { money } from "@/lib/format"
-import { listChannels, type Channel } from "@/lib/lookups"
+import { listChannels, type Channel } from "@/lib/channels"
 import { listProducts, type Product } from "@/lib/products"
 import {
   createSale,
