@@ -25,6 +25,11 @@ def refresh_snapshots(sale):
         # lista já em memória.
         tiers = list(sale.channel.fee_tiers.order_by("min_price"))
         default_freight = sale.channel.default_freight or Decimal("0")
+        # Arredondamento (§3.1): a borda é AQUI, por unidade. Congela unit_cogs e
+        # unit_fee em 2 casas. Consequência deliberada: o total de linha é
+        # qty × valor_arredondado, que pode diferir 1 centavo do round(qty × custo
+        # cheio) da planilha quando qty > 1 (ex.: bottons ×4 → 22,68 vs 22,67).
+        # Convenção aceita; arredondar por linha exigiria guardar precisão cheia.
         for item in sale.items.select_related("product__maker").all():
             item.unit_cogs = q2(unit_cogs(item.product)["total"])
             item.unit_fee = q2(fee_from_tiers(tiers, item.unit_price)["total"])
