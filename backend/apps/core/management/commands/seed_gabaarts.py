@@ -1,17 +1,28 @@
 """Popula o banco a partir da planilha Gabaarts_Oficial (Drive).
 
-Idempotente: roda quantas vezes quiser. Cadastro (artesãs, canais, produtos,
-equipamentos) usa update_or_create — reexecutar atualiza, nunca duplica.
-Vendas só são criadas se ainda não houver nenhuma; --reset-sales apaga e recria.
+Reexecução segura:
+- Cadastro (artesãs, produtos, combos, equipamentos): get_or_create — cria o que
+  falta e NÃO toca no que já existe. Rodar de novo não reverte edições feitas no
+  Admin (a proprietária é a fonte a partir da fase 1). Para reimportar um item já
+  cadastrado depois de mudá-lo na planilha, edite no Admin ou apague o registro.
+- Canais e faixas de taxa: sempre re-sincronizados (apaga e recria as faixas). É o
+  caminho para atualizar as taxas de marketplace quando mudarem — edite o dict
+  CHANNELS e rode de novo.
+- Vendas: só criadas se não houver nenhuma; --reset-sales apaga e recria.
 
 Fonte: planilha Gabaarts_Oficial, abas Parâmetros / Custo Unitário /
 Precificação / Canais de Venda / Vendas / Equipamentos (jul/2026).
 
 SUPOSIÇÕES marcadas com # CONFIRMAR são escolhas minhas onde a planilha era
 ambígua ou não tinha o dado. Revise antes de rodar em produção.
+
+Os objetos são criados com get_or_create/.create(), que pulam full_clean(); os
+dados aqui são curados e validados com --dry-run antes de persistir. Se editar as
+listas à mão, rode --dry-run primeiro para não deixar dado inválido passar.
 """
 from datetime import date
 from decimal import Decimal
+from typing import NamedTuple
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
@@ -46,30 +57,43 @@ CHANNELS = {
     "tiktok": ("TikTok Shop", D("0.00"), [("0", "0.06", "0")]),
 }
 
-# --- Produtos do catálogo (abas Custo Unitário + Precificação)
-# nome, categoria, material, tempo_min, artesã, embalagem, margem_alvo, preço_praticado
+
+# --- Produtos do catálogo (abas Custo Unitário + Precificação).
+# Campos nomeados: é a tabela mais larga e alimenta dinheiro; a posição sozinha
+# (4 strings numéricas adjacentes) esconderia uma troca material/embalagem/margem.
+class ProductRow(NamedTuple):
+    name: str
+    cat: str
+    material: str
+    time_min: int
+    maker: str
+    packaging: str
+    margin: str
+    price: str | None  # preço praticado; None = sem preço na planilha
+
+
 PRODUCTS = [
-    ("Canecas personalizadas", "gifts", "10.49", 10, "Filha", "3.00", "0.50", "38.00"),
-    ("Ímãs personalizados", "gifts", "2.70", 5, "Filha", "3.00", "0.50", "13.00"),
-    ("Chaveiros personalizados", "gifts", "2.50", 5, "Rouseli", "3.00", "0.50", "10.00"),
-    ("Bottons personalizados", "gifts", "1.50", 8, "Filha", "1.50", "0.50", "6.00"),
-    ("Caderno 1 matéria", "stationery", "31.50", 60, "Filha", "5.00", "0.20", "60.00"),
-    ("Caderno 10 matérias", "stationery", "39.60", 80, "Rouseli", "5.00", "0.50", None),
-    ("Caderno 15 matérias", "stationery", "49.20", 90, "Rouseli", "5.00", "0.50", None),
-    ("Caderno 20 matérias", "stationery", "55.60", 100, "Filha", "5.00", "0.25", "100.00"),
-    ("Agenda simples", "stationery", "26.40", 60, "Rouseli", "5.00", "0.50", None),
-    ("Agenda clássica", "stationery", "31.60", 80, "Rouseli", "5.00", "0.50", None),
-    ("Agenda luxo", "stationery", "36.50", 100, "Rouseli", "5.00", "0.50", None),
-    ("Caderneta de saúde", "stationery", "39.45", 80, "Filha", "5.00", "0.50", "75.00"),
-    ("Caderneta de gestante", "stationery", "39.45", 80, "Rouseli", "5.00", "0.50", None),
+    ProductRow("Canecas personalizadas", "gifts", "10.49", 10, "Filha", "3.00", "0.50", "38.00"),
+    ProductRow("Ímãs personalizados", "gifts", "2.70", 5, "Filha", "3.00", "0.50", "13.00"),
+    ProductRow("Chaveiros personalizados", "gifts", "2.50", 5, "Rouseli", "3.00", "0.50", "10.00"),
+    ProductRow("Bottons personalizados", "gifts", "1.50", 8, "Filha", "1.50", "0.50", "6.00"),
+    ProductRow("Caderno 1 matéria", "stationery", "31.50", 60, "Filha", "5.00", "0.20", "60.00"),
+    ProductRow("Caderno 10 matérias", "stationery", "39.60", 80, "Rouseli", "5.00", "0.50", None),
+    ProductRow("Caderno 15 matérias", "stationery", "49.20", 90, "Rouseli", "5.00", "0.50", None),
+    ProductRow("Caderno 20 matérias", "stationery", "55.60", 100, "Filha", "5.00", "0.25", "100.00"),
+    ProductRow("Agenda simples", "stationery", "26.40", 60, "Rouseli", "5.00", "0.50", None),
+    ProductRow("Agenda clássica", "stationery", "31.60", 80, "Rouseli", "5.00", "0.50", None),
+    ProductRow("Agenda luxo", "stationery", "36.50", 100, "Rouseli", "5.00", "0.50", None),
+    ProductRow("Caderneta de saúde", "stationery", "39.45", 80, "Filha", "5.00", "0.50", "75.00"),
+    ProductRow("Caderneta de gestante", "stationery", "39.45", 80, "Rouseli", "5.00", "0.50", None),
     # CONFIRMAR: planilha deixou categoria em branco em Álbuns/Azulejo/Relógio.
     # Classifiquei os fotográficos como "memories".
-    ("Álbum do bebê", "memories", "59.25", 90, "Rouseli", "5.00", "0.50", "90.00"),
-    ("Álbum de Foto", "memories", "59.25", 90, "Rouseli", "5.00", "0.50", "130.00"),
-    ("Etiquetas escolares/Adesivo", "school", "2.00", 5, "Rouseli", "3.00", "0.50", "15.00"),
-    ("Tabuadas chaveiro", "school", "3.90", 20, "Rouseli", "3.00", "0.50", "15.00"),
-    ("Azulejo", "memories", "13.30", 15, "Rouseli", "5.00", "0.50", "39.99"),  # CONFIRMAR categoria
-    ("Relógio", "memories", "14.30", 20, "Rouseli", "5.00", "0.50", "49.99"),  # CONFIRMAR categoria
+    ProductRow("Álbum do bebê", "memories", "59.25", 90, "Rouseli", "5.00", "0.50", "90.00"),
+    ProductRow("Álbum de Foto", "memories", "59.25", 90, "Rouseli", "5.00", "0.50", "130.00"),
+    ProductRow("Etiquetas escolares/Adesivo", "school", "2.00", 5, "Rouseli", "3.00", "0.50", "15.00"),
+    ProductRow("Tabuadas chaveiro", "school", "3.90", 20, "Rouseli", "3.00", "0.50", "15.00"),
+    ProductRow("Azulejo", "memories", "13.30", 15, "Rouseli", "5.00", "0.50", "39.99"),  # CONFIRMAR cat
+    ProductRow("Relógio", "memories", "14.30", 20, "Rouseli", "5.00", "0.50", "49.99"),  # CONFIRMAR cat
 ]
 
 # --- Produtos que aparecem só em Vendas, sem custo na aba Custo Unitário.
@@ -133,7 +157,7 @@ SALES = [
 
 
 class Command(BaseCommand):
-    help = "Popula o banco com os dados da planilha Gabaarts_Oficial (idempotente)."
+    help = "Popula o banco com os dados da planilha Gabaarts_Oficial (reexecução segura)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -146,38 +170,36 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        dry = options["dry_run"]
-        try:
-            with transaction.atomic():
-                self._seed(options["reset_sales"])
-                if dry:
-                    self.stdout.write(self.style.WARNING("\n--dry-run: rollback, nada persistido."))
-                    raise _Rollback()
-        except _Rollback:
-            pass
+        with transaction.atomic():
+            self._seed(options["reset_sales"])
+            if options["dry_run"]:
+                self.stdout.write(self.style.WARNING("\n--dry-run: rollback, nada persistido."))
+                transaction.set_rollback(True)
 
     def _seed(self, reset_sales):
-        makers = self._makers()
-        self._channels()
-        products = self._catalog(makers)
-        self._equipment()
-        self._sales(products, reset_sales)
+        makers = self._seed_makers()
+        self._seed_channels()
+        products = self._seed_catalog(makers)
+        self._seed_equipment()
+        self._seed_sales(products, reset_sales)
 
-    def _makers(self):
+    def _seed_makers(self):
         out = {}
         for name, rate in MAKERS.items():
-            out[name], _ = Maker.objects.update_or_create(
+            out[name], _ = Maker.objects.get_or_create(
                 name=name, defaults={"hourly_rate": rate}
             )
         self.stdout.write(f"Artesãs: {len(out)} garantidas.")
         return out
 
-    def _channels(self):
+    def _seed_channels(self):
+        # Único cadastro que re-sincroniza sempre: é como as taxas de marketplace
+        # são atualizadas. Não é editado no Admin pela proprietária.
         for slug, (name, freight, tiers) in CHANNELS.items():
             ch, _ = Channel.objects.update_or_create(
                 slug=slug, defaults={"name": name, "default_freight": freight}
             )
-            ch.fee_tiers.all().delete()  # re-sync das faixas
+            ch.fee_tiers.all().delete()
             for min_price, pct, fixed in tiers:
                 ChannelFeeTier.objects.create(
                     channel=ch, min_price=D(min_price),
@@ -185,21 +207,21 @@ class Command(BaseCommand):
                 )
         self.stdout.write(f"Canais: {len(CHANNELS)} sincronizados (+ os da migration).")
 
-    def _catalog(self, makers):
+    def _seed_catalog(self, makers):
         products = {}
-        for name, cat, mat, t, maker, pack, margin, price in PRODUCTS:
-            products[name], _ = Product.objects.update_or_create(
-                name=name,
+        for p in PRODUCTS:
+            products[p.name], _ = Product.objects.get_or_create(
+                name=p.name,
                 defaults={
-                    "category": cat, "is_active": True, "is_combo": False,
-                    "material_cost": D(mat), "packaging_cost": D(pack),
-                    "waste_pct": D("0"), "production_time_min": t, "batch_size": 1,
-                    "maker": makers[maker], "target_margin_pct": D(margin),
-                    "base_price": D(price) if price else None,
+                    "category": p.cat, "is_active": True, "is_combo": False,
+                    "material_cost": D(p.material), "packaging_cost": D(p.packaging),
+                    "waste_pct": D("0"), "production_time_min": p.time_min, "batch_size": 1,
+                    "maker": makers[p.maker], "target_margin_pct": D(p.margin),
+                    "base_price": D(p.price) if p.price else None,
                 },
             )
         for name, cat, cost, price, _note in EXTRA_PRODUCTS:
-            products[name], _ = Product.objects.update_or_create(
+            products[name], _ = Product.objects.get_or_create(
                 name=name,
                 defaults={
                     "category": cat, "is_active": True, "is_combo": False,
@@ -210,7 +232,7 @@ class Command(BaseCommand):
                 },
             )
         for name, cat, price, comps, _note in COMBOS:
-            combo, _ = Product.objects.update_or_create(
+            combo, created = Product.objects.get_or_create(
                 name=name,
                 defaults={
                     "category": cat, "is_active": True, "is_combo": True,
@@ -220,9 +242,9 @@ class Command(BaseCommand):
                     "base_price": D(price) if price else None,
                 },
             )
-            combo.combo_items.all().delete()  # re-sync dos componentes
-            for comp_name, qty in comps:
-                ComboItem.objects.create(combo=combo, component=products[comp_name], qty=qty)
+            if created:  # componentes só na criação: não sobrescreve combo já existente
+                for comp_name, qty in comps:
+                    ComboItem.objects.create(combo=combo, component=products[comp_name], qty=qty)
             products[name] = combo
         self.stdout.write(
             f"Produtos: {len(PRODUCTS)} do catálogo + {len(EXTRA_PRODUCTS)} extras "
@@ -230,9 +252,9 @@ class Command(BaseCommand):
         )
         return products
 
-    def _equipment(self):
+    def _seed_equipment(self):
         for name, cat, value in EQUIPMENT:
-            Equipment.objects.update_or_create(
+            Equipment.objects.get_or_create(
                 name=name,
                 defaults={
                     "category": cat,
@@ -242,7 +264,7 @@ class Command(BaseCommand):
             )
         self.stdout.write(f"Equipamentos: {len(EQUIPMENT)} garantidos.")
 
-    def _sales(self, products, reset_sales):
+    def _seed_sales(self, products, reset_sales):
         if reset_sales:
             Sale.objects.all().delete()
         elif Sale.objects.exists():
@@ -261,7 +283,3 @@ class Command(BaseCommand):
             )
             refresh_snapshots(sale)  # congela unit_cogs/unit_fee/unit_freight
         self.stdout.write(f"Vendas: {len(SALES)} criadas (snapshots congelados).")
-
-
-class _Rollback(Exception):
-    """Sinaliza rollback do --dry-run sem vazar erro real."""
