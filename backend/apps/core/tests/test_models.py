@@ -67,3 +67,10 @@ def test_faixa_de_taxa_rejeita_valores_negativos():
                            commission_pct=Decimal("-0.10"), fixed_fee=Decimal("-1.00"))
     with pytest.raises(ValidationError):
         faixa.full_clean()
+
+
+def test_perda_acima_de_100pct_bloqueada():
+    # 1,50 = 150% de perda; provável dedo gordo (0,50 digitado como 50 vira 5000%)
+    produto = Product(name="Caneca", waste_pct=Decimal("1.5"))
+    with pytest.raises(ValidationError):
+        produto.full_clean()

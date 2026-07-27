@@ -2,6 +2,8 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.core.models import Channel, Maker, Product, Sale, SaleItem
 from apps.core.services import sales as sales_service
@@ -75,17 +77,32 @@ def test_refresh_e_atomico(monkeypatch):
     SaleItem.objects.create(sale=sale, product=item.product, qty=1,
                             unit_price=Decimal("30.00"))
     chamadas = {"n": 0}
-    taxa_real = sales_service.channel_fee
+    taxa_real = sales_service.fee_from_tiers
 
-    def explode_na_segunda(channel, price):
+    def explode_na_segunda(tiers, price):
         chamadas["n"] += 1
         if chamadas["n"] == 2:
             raise RuntimeError("falha simulada")
-        return taxa_real(channel, price)
+        return taxa_real(tiers, price)
 
-    monkeypatch.setattr(sales_service, "channel_fee", explode_na_segunda)
+    monkeypatch.setattr(sales_service, "fee_from_tiers", explode_na_segunda)
     with pytest.raises(RuntimeError):
         refresh_snapshots(sale)
     item.refresh_from_db()
     # rollback total: o primeiro item não pode ter ficado congelado pela metade
     assert item.unit_cogs == Decimal("0")
+
+
+def test_snapshot_le_as_faixas_do_canal_uma_vez():
+    # 3 itens no mesmo canal não podem reler as faixas 3x (era N+1 via channel_fee)
+    sale, item, _ = nova_venda()
+    for _ in range(2):
+        SaleItem.objects.create(sale=sale, product=item.product, qty=1,
+                                unit_price=Decimal("40.00"))
+    with CaptureQueriesContext(connection) as ctx:
+        refresh_snapshots(sale)
+    leituras = [
+        q for q in ctx.captured_queries
+        if "channelfeetier" in q["sql"].lower() and q["sql"].lower().startswith("select")
+    ]
+    assert len(leituras) == 1, [q["sql"] for q in leituras]

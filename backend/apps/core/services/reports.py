@@ -4,7 +4,7 @@ Sem tabela de resumo materializada: aggregate() resolve neste volume (§5).
 """
 from decimal import Decimal
 
-from django.db.models import DecimalField, ExpressionWrapper, F, Sum, Value
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum, Value
 from django.db.models.functions import Coalesce
 
 from apps.core.models import Sale, SaleItem
@@ -29,10 +29,15 @@ def sales_summary(date_from, date_to, channel=None):
     if channel is not None:
         items = items.filter(sale__channel=channel)
 
-    totals = items.aggregate(revenue=Sum(REVENUE), profit=Sum(PROFIT))
+    # count de vendas distintas vai junto do aggregate: era uma query só para ele
+    totals = items.aggregate(
+        revenue=Sum(REVENUE),
+        profit=Sum(PROFIT),
+        sales_count=Count("sale", distinct=True),
+    )
     revenue = totals["revenue"] if totals["revenue"] is not None else Decimal("0.00")
     profit = totals["profit"] if totals["profit"] is not None else Decimal("0.00")
-    sales_count = items.values("sale_id").distinct().count()
+    sales_count = totals["sales_count"]
 
     by_channel = list(
         items.values("sale__channel_id", channel_name=F("sale__channel__name"))
