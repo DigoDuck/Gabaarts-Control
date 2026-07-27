@@ -40,7 +40,10 @@ class Product(models.Model):
     )
     waste_pct = models.DecimalField(
         "perda sobre material (fração)", max_digits=5, decimal_places=4,
-        default=Decimal("0"), validators=[MinValueValidator(Decimal("0"))],
+        default=Decimal("0"),
+        # teto 1 = perda até 100% do material; sem ele, 0,50 (50%) e 50 (5000%)
+        # eram ambos aceitos. Afrouxar se algum processo tiver refugo > material.
+        validators=[MinValueValidator(Decimal("0")), MaxValueValidator(Decimal("1"))],
     )
     production_time_min = models.PositiveIntegerField("tempo de produção (min/lote)", default=0)
     batch_size = models.PositiveIntegerField(
