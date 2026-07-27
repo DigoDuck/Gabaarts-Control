@@ -8,7 +8,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from .costing import q2, unit_cogs
-from .fees import channel_fee
+from .fees import fee_from_tiers
 
 
 def refresh_snapshots(sale):
@@ -20,9 +20,14 @@ def refresh_snapshots(sale):
     """
     # tudo-ou-nada: falha no meio não pode deixar a venda meio-congelada
     with transaction.atomic():
+        # faixas e frete do canal lidos UMA vez; antes channel_fee relia as
+        # faixas a cada item (N+1). fee_from_tiers dá o mesmo resultado sobre a
+        # lista já em memória.
+        tiers = list(sale.channel.fee_tiers.order_by("min_price"))
+        default_freight = sale.channel.default_freight or Decimal("0")
         for item in sale.items.select_related("product__maker").all():
             item.unit_cogs = q2(unit_cogs(item.product)["total"])
-            item.unit_fee = q2(channel_fee(sale.channel, item.unit_price)["total"])
+            item.unit_fee = q2(fee_from_tiers(tiers, item.unit_price)["total"])
             if item.unit_freight is None:
-                item.unit_freight = sale.channel.default_freight or Decimal("0")
+                item.unit_freight = default_freight
             item.save(update_fields=["unit_cogs", "unit_fee", "unit_freight"])
