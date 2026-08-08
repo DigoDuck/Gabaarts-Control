@@ -145,7 +145,7 @@ export function Sales() {
                         {sale.customer_name || "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {money(sale.total)}
+                        {money(sale.products_total)}
                       </TableCell>
                       {/* prejuízo é o único caso em que o número ganha cor (DESIGN.md, regra dura 2) */}
                       <TableCell
