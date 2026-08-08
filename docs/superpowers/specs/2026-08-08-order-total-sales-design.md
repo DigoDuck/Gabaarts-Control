@@ -1,6 +1,6 @@
 # Venda por total do pedido
 
-Status: desenho aprovado no chat em 08/08/2026; aguardando revisão desta especificação antes do plano de implementação.
+Status: especificação aprovada pelo Diogo em 08/08/2026.
 
 ## Objetivo
 
@@ -80,7 +80,7 @@ Resposta:
   "applied_channel_fee": "28.00",
   "fee_source": "suggested",
   "profit": "43.80",
-  "margin_pct": "36.50",
+  "margin_pct": "0.3650",
   "amount_paid": "135.00",
   "warnings": []
 }
