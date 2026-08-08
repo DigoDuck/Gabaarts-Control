@@ -58,10 +58,10 @@ erDiagram
 | `Maker` (artesã) | `name`, `hourly_rate` (seed: Rouseli 12,00; Filha 10,00) | plumbing |
 | `Product` | `name`, `category` (choices: Presentes, Papelaria, Memórias, Escolar, Outros), `is_active`, `is_combo`; custo: `material_cost`, `packaging_cost`, `waste_pct`, `production_time_min`, `batch_size`, `maker` FK; comercial: `target_margin_pct`, `base_price` | **core** |
 | `ComboItem` | `combo` FK, `component` FK, `qty` (kit = 2+ itens; ver 1.4) | **core** |
-| `Channel` | `name`, `slug` (`instagram`, `whatsapp`, `shopee`, `site`), `default_freight` (R$/un, nullable; pré-preenche o frete quando o canal tiver valor fixo) | plumbing |
+| `Channel` | `name`, `slug` (`instagram`, `whatsapp`, `shopee`, `site`), `default_freight` (legado; não entra no novo formulário) | plumbing |
 | `ChannelFeeTier` | `channel` FK, `min_price`, `commission_pct`, `fixed_fee` | **core** |
-| `Sale` | `date` (dia), `channel` FK, `customer_name` (CharField opcional), `status` (`pending` / `completed` / `canceled`) | **core** |
-| `SaleItem` | `sale` FK, `product` FK **obrigatório**, `qty`, `unit_price`; snapshots: `unit_cogs`, `unit_fee`, `unit_freight` | **core** |
+| `Sale` | `date` (dia), `channel` FK, `customer_name` (CharField opcional), `status`; fatos: `products_total`, `shipping_amount`; snapshots: `channel_fee`, `fee_source`; preservação histórica: `legacy_freight_cost` | **core** |
+| `SaleItem` | `sale` FK, `product` FK **obrigatório**, `qty`; snapshot: `unit_cogs` | **core** |
 | `Equipment` | espelho da aba Equipamentos, zero lógica | plumbing |
 
 Anti-decisões conscientes:
@@ -78,29 +78,39 @@ Anti-decisões conscientes:
 | COGS unitário (com breakdown material / MO / embalagem para exibição) | `services/costing.py`, função pura | Testável sem banco; Admin e API exibem o breakdown |
 | Mão de obra: `tempo × custo_hora ÷ 60 ÷ lote` | dentro de `costing` | Validada contra a planilha (seção 0.2) |
 | Perda: `material × (1 + waste_pct)` (só sobre material; ver 7-A4) | dentro de `costing` | |
-| Taxa por canal | `services/fees.py`, **único ponto de entrada** `channel_fee(channel, unit_price)` | Seção 2 |
+| Taxa por canal | `services/fees.py`, **único ponto de entrada da fórmula** `channel_fee(channel, unit_price)`; `services/sales.py` distribui o total do pedido entre os itens apenas para sugerir a taxa | Seção 2 |
 | Preço sugerido e preço-alvo | `services/pricing.py` | Seção 3 |
-| Snapshot na venda | service `create_sale` (chamado pelo Admin via `save_model`/inline e pelo serializer) | Seção 1.3 |
+| Apuração e snapshot na venda | service de vendas compartilhado por preview, criação e atualização | Seção 1.3 |
 | Relatórios | `services/reports.py`, ORM aggregates | |
-| Validações de entrada (preço > 0, qty ≥ 1, produto ativo) | model `clean()` + serializer | Trust boundary; impede o lucro fantasma da planilha |
+| Validações de entrada (`products_total` > 0, qty ≥ 1, produto ativo, frete/taxa manual ≥ 0) | model `clean()` + serializer | Trust boundary; impede o lucro fantasma da planilha |
 
 Princípio: **models guardam dado, services calculam**. Services são funções puras sobre `Decimal`; a camada DRF e o Admin são só transporte.
 
 ### 1.3 Decisão core nº 1: snapshot, não recálculo
 
-Ao criar um `SaleItem`, o sistema **congela** `unit_cogs`, `unit_fee` e `unit_freight`. Lucro deriva só dos campos congelados:
+Ao registrar uma venda, o sistema **congela** `unit_cogs` nos itens e `channel_fee` no cabeçalho. O valor dos produtos é um fato do pedido inteiro, não a soma de preços unitários digitados:
 
 ```
-lucro_unit = unit_price − unit_cogs − unit_fee − unit_freight
+total_cogs = Σ qty × unit_cogs
+profit = products_total − total_cogs − channel_fee − legacy_freight_cost
+margin_pct = profit ÷ products_total
+amount_paid = products_total + shipping_amount
 ```
 
 - Mudar custo/hora ou taxa **não** reescreve o passado.
-- Editar uma venda recalcula os snapshots daquela venda, explicitamente.
+- `shipping_amount` é repasse cobrado à parte e não reduz o lucro.
+- Editar canal, total dos produtos, itens ou taxa manual produz novo snapshot explicitamente.
 - Sem versionamento de taxas (`valid_from`): o snapshot já preserva o histórico que importa.
 
 Refinado em 22/07/2026 (fase 2c-1): a edição só refaz o snapshot quando o payload
 altera canal ou itens. Corrigir cliente, data ou situação de uma venda antiga não
 re-precifica a venda com os parâmetros de hoje.
+
+Refinado em 08/08/2026: `products_total` substitui o preço unitário como entrada da
+venda, o frete passa a ser repasse neutro e uma taxa real informada pela plataforma
+pode substituir a sugestão. A taxa informada é um fato observado, não uma fórmula
+alternativa. Vendas anteriores preservam lucro e receita por migração; eventual
+frete antigo não zero fica em `legacy_freight_cost`, somente leitura.
 
 ### 1.4 Kits (combos)
 
@@ -143,13 +153,29 @@ Mercado Livre e TikTok, quando entrarem, são **inserções de dados** nesta tab
 | Expressividade | Ilimitada | Só regras `% + fixo` por faixa de preço |
 | Mudança de taxa | Deploy | Rouseli edita no Admin (a tabela Shopee é "vigente 03/2026"; taxa de marketplace muda) |
 | Código | 4+ classes idênticas parametrizadas + registry | 1 função de ~10 linhas |
-| Preço-alvo | Cada strategy precisaria expor a inversa | Álgebra sobre as faixas, genérico (2.3) |
+| Preço-alvo | Cada strategy precisaria expor a inversa | Álgebra sobre as faixas, genérico (2.4) |
 
 **Escolha: tabela de dados.** Strategy com implementações idênticas parametrizadas é abstração especulativa.
 
 **Mitigação de risco:** `fees.channel_fee(channel, unit_price)` é o único ponto de entrada para taxa no sistema. Se um canal futuro tiver regra que não cabe em faixas (ex.: custo fixo do ML por peso/dimensão, se confirmado quando o ML entrar), ele vira um desvio dentro dessa função, sem mudar quem chama.
 
-### 2.3 Circularidade do preço-alvo (Shopee)
+### 2.3 Taxa sugerida no pedido sem preço por item
+
+Taxas de marketplace podem ter componentes percentuais e fixos por unidade. Como
+o novo formulário recebe apenas `products_total`, um pedido com produtos diferentes
+não contém informação suficiente para reconstruir preços unitários exatos. O service
+de vendas gera somente uma sugestão:
+
+1. usa `base_price × qty` como peso comercial de cada linha;
+2. distribui `products_total` proporcionalmente entre as linhas;
+3. chama `fee_from_tiers()` com o preço estimado de cada unidade;
+4. soma a taxa das unidades e arredonda o total em duas casas.
+
+O usuário pode substituir a sugestão pelo total efetivamente descontado no extrato
+da plataforma. O snapshot registra o valor aplicado e `fee_source` (`suggested` ou
+`manual`). A fórmula permanece exclusivamente em `services/fees.py`.
+
+### 2.4 Circularidade do preço-alvo (Shopee)
 
 Para achar o preço que entrega margem `m`:
 
@@ -177,7 +203,7 @@ Por que não busca binária: a margem é **descontínua** nas fronteiras (cresce
 
 ### 3.1 Definições travadas
 
-- **Margem sobre o preço** (não markup): `margem% = (preço − COGS − taxa − frete) / preço`. Confirmado pela planilha (caneca: 15,16 / 0,5 = 30,31).
+- **Margem sobre o preço** (não markup). Na precificação: `(preço − COGS − taxa − frete) / preço`. Na venda: `(products_total − total_cogs − channel_fee − legacy_freight_cost) / products_total`.
 - **Margem de contribuição**: sem rateio de custo fixo por peça. Regra de ouro mantida.
 - **Perda só sobre material** (`material × (1 + waste_pct)`): perda real é insumo estragado (impressão errada, sublimação falha); embalagem não se perde junto. Se a prática mostrar o contrário, muda-se a fórmula em um único lugar (`costing`).
 - **`Decimal` em tudo**, nunca float. `DecimalField(max_digits=9, decimal_places=2)`; percentuais com 4 casas; `ROUND_HALF_UP` aplicado uma vez, no fim de cada cálculo.
@@ -191,9 +217,12 @@ Por que não busca binária: a margem é **descontínua** nas fronteiras (cresce
 | `pricing.suggested_price(cogs, margin)` | custo, margem-alvo | preço cost-plus (canais diretos) |
 | `pricing.target_price(channel, cogs, margin, freight=None)` | canal, custo, margem | preço + avisos (faixa usada, zona morta próxima); `freight` default do canal |
 | `pricing.simulate(product, channel, price, freight=None)` | | margem R$ e %, situação vs meta |
+| `sales.preview_sale(channel, products_total, items, shipping_amount=0, fee_override=None)` | fatos atuais do formulário | COGS, taxa sugerida/aplicada, lucro, margem, total pago e avisos |
 | `reports.sales_summary(from, to, channel=None)` | período | receita, lucro, ticket médio, nº vendas, quebra por canal; só `completed` |
 
-Frete: manual por item de venda (`unit_freight`), pré-preenchido com `Channel.default_freight` quando existir (decisão A5).
+Frete na venda: `shipping_amount` é o valor cobrado à parte do cliente e é neutro
+para lucro e margem. O frete usado pelo simulador de preço continua sendo custo da
+simulação e não muda com esta decisão.
 
 ---
 
@@ -216,6 +245,7 @@ Revisão de escopo (decisões C1/C2, seção 7): **o cadastro migra do Admin par
 | CRUD `/api/channels/` (faixas de taxa aninhadas) | canais com faixas |
 | CRUD `/api/makers/` · CRUD `/api/equipment/` | artesãs e equipamentos |
 | CRUD `/api/sales/` (itens aninhados; `?from=&to=&channel=`) | vendas com snapshot no create/update via `services/sales` |
+| `POST /api/sales/preview/` | mesmo payload financeiro da venda → COGS, taxa sugerida/aplicada, lucro, margem, total pago e avisos |
 | `POST /api/pricing/simulate/` | `{product, channel, price, freight?}` → taxa, margem R$ e %, situação vs meta |
 | `POST /api/pricing/target-price/` | `{product, channel, margin, freight?}` → preço + avisos (faixa usada, zona morta) |
 | `GET /api/reports/summary/?from=&to=&channel=` | resumo de vendas (KPIs do dashboard) |
@@ -257,7 +287,7 @@ Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de v
 ## 6. Itens em aberto (não bloqueiam a fase 1)
 
 1. **Gateway do Site**: % a definir; seed provisório 5%, ajustar a linha da tabela quando fechar.
-2. **Frete fixo por canal**: preencher `default_freight` dos canais quando os valores existirem (hoje tudo 0).
+2. **Frete no simulador**: preencher `default_freight` dos canais quando houver um custo padrão útil para simulação (hoje tudo 0); o registro da venda não usa esse default.
 
 ---
 
@@ -268,7 +298,7 @@ Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de v
 | A1 | Custo/hora | **Planilha**: Rouseli 12,00 / Filha 10,00 |
 | A2/A3 | TikTok e Mercado Livre | **Fora do seed**; entram como dados quando ativarem |
 | A4 | Perda/refugo | Recomendação aceita: **só sobre material** |
-| A5 | Frete | **Manual por venda**, com default fixo por canal quando existir (`Channel.default_freight`) |
+| A5 | Frete | **Superada por D2 para o registro de venda**; permanece como custo opcional no simulador de preço |
 | B6 | Estrutura de venda | **Cabeçalho + itens** (`Sale` + `SaleItem`) |
 | B7 | Item avulso | **Não existe**: tudo vira produto cadastrado; kit = produto com 2+ componentes |
 | B8 | Preço por canal | **Descartado** como cadastro; simulação sob demanda |
@@ -288,6 +318,16 @@ Dashboard da fase 2 (decisão C3): cards de receita/lucro/ticket médio/nº de v
 | C6 | Deploy | **Resolvido em 20/07/2026**: Railway (backend + Postgres) + Vercel (front), DECISIONS.md #010 |
 | C7 | Dono da decisão visual | **Diogo** (20/07/2026). O sistema é de uso interno dos dois; a Rouseli deixa de ser checkpoint de aprovação da UI, o que supersede a validação prevista em C4 |
 
+### Chat de 08/08/2026 (venda por total do pedido)
+
+| # | Pergunta | Decisão |
+|---|---|---|
+| D1 | Entrada financeira da venda | **Valor total dos produtos no pedido**, sem exigir preço unitário por item |
+| D2 | Frete | Cobrado à parte; soma ao total pago e é **neutro para o lucro** |
+| D3 | Resultado principal | Exibir **lucro total do pedido**, não lucro por item |
+| D4 | Taxa de marketplace | Sugerida por unidade via `services/fees`; o total real do extrato pode substituir a estimativa e fica congelado |
+| D5 | Experiência do formulário | Layout A, resultado dentro do fluxo e atualizado ao vivo antes de salvar |
+
 ---
 
-*Próximo passo: fase 2b — fundação do frontend e validação da tela de referência pela Rouseli.*
+*Próximo passo: implementar a melhoria de venda por total do pedido conforme a especificação aprovada.*
