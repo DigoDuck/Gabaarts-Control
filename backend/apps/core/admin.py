@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.contrib import admin
 
 from .models import (
@@ -7,7 +5,7 @@ from .models import (
 )
 from .services.costing import q2, unit_cogs
 from .services.pricing import margin_on_price, margin_status, suggested_price
-from .services.sales import refresh_snapshots
+from .services.sales import refresh_snapshots, snapshot_result
 
 admin.site.site_header = "Gabaarts Control"
 admin.site.site_title = "Gabaarts Control"
@@ -82,23 +80,8 @@ class SaleItemInline(admin.TabularInline):
     # venda sem item não tem receita nem lucro; o serializer barra na API e o
     # Admin (fallback técnico) barra aqui
     min_num = 1
-    fields = ["product", "qty", "unit_price", "unit_freight",
-              "unit_cogs", "unit_fee", "unit_profit_display", "status_vs_target"]
-    readonly_fields = ["unit_cogs", "unit_fee", "unit_profit_display", "status_vs_target"]
-
-    @admin.display(description="lucro unit. (R$)")
-    def unit_profit_display(self, obj):
-        if obj is None or obj.pk is None:
-            return "—"
-        return obj.unit_profit
-
-    @admin.display(description="situação vs meta")
-    def status_vs_target(self, obj):
-        if obj is None or obj.pk is None or not obj.unit_price:
-            return "—"
-        margin = margin_on_price(obj.unit_profit, obj.unit_price)
-        label = margin_status(margin, obj.product.target_margin_pct)
-        return f"margem {q2(margin * 100)}% — {label}"
+    fields = ["product", "qty", "unit_cogs"]
+    readonly_fields = ["unit_cogs"]
 
 
 @admin.register(Sale)
@@ -108,6 +91,30 @@ class SaleAdmin(admin.ModelAdmin):
     list_filter = ["channel", "status"]
     date_hierarchy = "date"
     inlines = [SaleItemInline]
+    readonly_fields = [
+        "channel_fee",
+        "fee_source",
+        "legacy_freight_cost",
+        "total_cogs_display",
+        "profit_display",
+        "margin_display",
+        "amount_paid_display",
+    ]
+    fields = [
+        "date",
+        "channel",
+        "customer_name",
+        "status",
+        "products_total",
+        "shipping_amount",
+        "channel_fee",
+        "fee_source",
+        "total_cogs_display",
+        "profit_display",
+        "margin_display",
+        "amount_paid_display",
+        "legacy_freight_cost",
+    ]
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("channel").prefetch_related("items")
@@ -116,7 +123,7 @@ class SaleAdmin(admin.ModelAdmin):
         # mesma regra da API (serializers.SaleSerializer.update): o snapshot só
         # é refeito quando a edição mexe no que entra na conta. Corrigir cliente
         # ou situação não pode re-precificar uma venda antiga.
-        recalculates = "channel" in form.changed_data or any(
+        recalculates = bool({"channel", "products_total"} & set(form.changed_data)) or any(
             formset.has_changed() for formset in formsets
         )
         super().save_related(request, form, formsets, change)
@@ -125,11 +132,29 @@ class SaleAdmin(admin.ModelAdmin):
 
     @admin.display(description="total (R$)")
     def total_display(self, obj):
-        return sum((i.qty * i.unit_price for i in obj.items.all()), Decimal("0"))
+        return obj.products_total
+
+    def _result_value(self, obj, key):
+        if obj is None or obj.pk is None:
+            return "—"
+        return snapshot_result(obj)[key]
+
+    @admin.display(description="COGS total (R$)")
+    def total_cogs_display(self, obj):
+        return self._result_value(obj, "total_cogs")
 
     @admin.display(description="lucro (R$)")
     def profit_display(self, obj):
-        return sum((i.qty * i.unit_profit for i in obj.items.all()), Decimal("0"))
+        return self._result_value(obj, "profit")
+
+    @admin.display(description="margem")
+    def margin_display(self, obj):
+        value = self._result_value(obj, "margin_pct")
+        return value if value == "—" else f"{q2(value * 100)}%"
+
+    @admin.display(description="total pago (R$)")
+    def amount_paid_display(self, obj):
+        return self._result_value(obj, "amount_paid")
 
 
 @admin.register(Equipment)

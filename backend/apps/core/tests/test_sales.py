@@ -7,7 +7,7 @@ from django.test.utils import CaptureQueriesContext
 
 from apps.core.models import Channel, Maker, Product, Sale, SaleItem
 from apps.core.services import sales as sales_service
-from apps.core.services.sales import refresh_snapshots
+from apps.core.services.sales import refresh_snapshots, snapshot_result
 
 pytestmark = pytest.mark.django_db
 
@@ -16,22 +16,24 @@ def nova_venda():
     filha = Maker.objects.get(name="Filha")
     caneca = Product.objects.create(
         name="Caneca", material_cost=Decimal("10.49"), production_time_min=10,
-        maker=filha, packaging_cost=Decimal("3.00"),
+        maker=filha, packaging_cost=Decimal("3.00"), base_price=Decimal("40.00"),
     )
-    sale = Sale.objects.create(date=date(2026, 7, 18),
-                               channel=Channel.objects.get(slug="shopee"))
-    item = SaleItem.objects.create(sale=sale, product=caneca, qty=1,
-                                   unit_price=Decimal("40.00"))
+    sale = Sale.objects.create(
+        date=date(2026, 7, 18), channel=Channel.objects.get(slug="shopee"),
+        products_total=Decimal("40.00"),
+    )
+    item = SaleItem.objects.create(sale=sale, product=caneca, qty=1)
     return sale, item, filha
 
 
-def test_snapshot_congela_custo_taxa_frete():
+def test_snapshot_congela_custo_e_taxa():
     sale, item, _ = nova_venda()
     refresh_snapshots(sale)
     item.refresh_from_db()
     assert item.unit_cogs == Decimal("15.16")
-    assert item.unit_fee == Decimal("12.00")
-    assert item.unit_freight == Decimal("0.00")  # canal sem frete padrão → 0
+    sale.refresh_from_db()
+    assert sale.channel_fee == Decimal("12.00")
+    assert sale.fee_source == Sale.FeeSource.SUGGESTED
 
 
 def test_mudar_custo_hora_nao_reescreve_o_passado():  # bug nº 1 da planilha (§0.1)
@@ -53,29 +55,31 @@ def test_editar_venda_recalcula_explicitamente():  # §1.3
     assert item.unit_cogs == Decimal("17.16")  # 10,49 + 10×22÷60 + 3,00 → 17,16
 
 
-def test_frete_manual_nao_e_sobrescrito():  # decisão A5: frete é manual por item
+def test_frete_informado_e_neutro_para_o_lucro():
     sale, item, _ = nova_venda()
-    item.unit_freight = Decimal("7.50")
-    item.save()
     refresh_snapshots(sale)
-    item.refresh_from_db()
-    assert item.unit_freight == Decimal("7.50")
+    profit = snapshot_result(sale)["profit"]
+    sale.shipping_amount = Decimal("7.50")
+    sale.save(update_fields=["shipping_amount"])
+    refresh_snapshots(sale)
+    result = snapshot_result(sale)
+    assert result["profit"] == profit
+    assert result["amount_paid"] == Decimal("47.50")
 
 
-def test_frete_padrao_do_canal_preenche_quando_nao_informado():  # decisão A5
+def test_frete_padrao_do_canal_nao_altera_a_venda():
     sale, item, _ = nova_venda()
     canal = sale.channel
     canal.default_freight = Decimal("2.00")
     canal.save()
     refresh_snapshots(sale)
-    item.refresh_from_db()
-    assert item.unit_freight == Decimal("2.00")
+    sale.refresh_from_db()
+    assert sale.shipping_amount == Decimal("0.00")
 
 
 def test_refresh_e_atomico(monkeypatch):
     sale, item, _ = nova_venda()
-    SaleItem.objects.create(sale=sale, product=item.product, qty=1,
-                            unit_price=Decimal("30.00"))
+    SaleItem.objects.create(sale=sale, product=item.product, qty=1)
     chamadas = {"n": 0}
     taxa_real = sales_service.fee_from_tiers
 
@@ -97,8 +101,7 @@ def test_snapshot_le_as_faixas_do_canal_uma_vez():
     # 3 itens no mesmo canal não podem reler as faixas 3x (era N+1 via channel_fee)
     sale, item, _ = nova_venda()
     for _ in range(2):
-        SaleItem.objects.create(sale=sale, product=item.product, qty=1,
-                                unit_price=Decimal("40.00"))
+        SaleItem.objects.create(sale=sale, product=item.product, qty=1)
     with CaptureQueriesContext(connection) as ctx:
         refresh_snapshots(sale)
     leituras = [

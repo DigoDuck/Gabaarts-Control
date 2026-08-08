@@ -276,10 +276,10 @@ class Command(BaseCommand):
         for prod_name, qty, price, customer in SALES:
             sale = Sale.objects.create(
                 date=SALE_DATE, channel=whatsapp, customer_name=customer,
-                status=Sale.Status.COMPLETED,
+                status=Sale.Status.COMPLETED, products_total=D(price) * qty,
             )
             SaleItem.objects.create(
-                sale=sale, product=products[prod_name], qty=qty, unit_price=D(price),
+                sale=sale, product=products[prod_name], qty=qty,
             )
-            refresh_snapshots(sale)  # congela unit_cogs/unit_fee/unit_freight
+            refresh_snapshots(sale)  # congela COGS e taxa no cabeçalho
         self.stdout.write(f"Vendas: {len(SALES)} criadas (snapshots congelados).")

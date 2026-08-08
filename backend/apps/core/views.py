@@ -198,7 +198,7 @@ class SummaryView(APIView):
                 "avg_ticket": str(summary["avg_ticket"]),
                 "by_channel": [
                     {
-                        "channel": row["sale__channel_id"],
+                        "channel": row["channel_id"],
                         "channel_name": row["channel_name"],
                         "revenue": str(row["revenue"]),
                         "profit": str(row["profit"]),

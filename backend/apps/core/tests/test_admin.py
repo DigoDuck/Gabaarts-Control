@@ -24,7 +24,7 @@ def test_criar_venda_pelo_admin_congela_snapshot(admin_client):
     filha = Maker.objects.get(name="Filha")
     caneca = Product.objects.create(
         name="Caneca", material_cost=Decimal("10.49"), production_time_min=10,
-        maker=filha, packaging_cost=Decimal("3.00"),
+        maker=filha, packaging_cost=Decimal("3.00"), base_price=Decimal("40.00"),
     )
     shopee = Channel.objects.get(slug="shopee")
     data = {
@@ -32,20 +32,20 @@ def test_criar_venda_pelo_admin_congela_snapshot(admin_client):
         "channel": str(shopee.pk),
         "customer_name": "",
         "status": "completed",
+        "products_total": "40.00",
+        "shipping_amount": "0.00",
         "items-TOTAL_FORMS": "1",
         "items-INITIAL_FORMS": "0",
         "items-MIN_NUM_FORMS": "0",
         "items-MAX_NUM_FORMS": "1000",
         "items-0-product": str(caneca.pk),
         "items-0-qty": "1",
-        "items-0-unit_price": "40.00",
-        "items-0-unit_freight": "",
     }
     resp = admin_client.post("/admin/core/sale/add/", data)
     assert resp.status_code == 302  # 200 = formulário voltou com erro de validação
     item = Sale.objects.get().items.get()
     assert item.unit_cogs == Decimal("15.16")
-    assert item.unit_fee == Decimal("12.00")
+    assert item.sale.channel_fee == Decimal("12.00")
 
 
 def test_admin_nao_reescreve_snapshot_em_edicao_sem_efeito_no_calculo(admin_client):
@@ -57,11 +57,15 @@ def test_admin_nao_reescreve_snapshot_em_edicao_sem_efeito_no_calculo(admin_clie
         packaging_cost=Decimal("3.00"),
         production_time_min=10,
         maker=maker,
+        base_price=Decimal("40.00"),
     )
     canal = Channel.objects.get(slug="whatsapp")
-    venda = Sale.objects.create(date="2026-07-10", channel=canal, customer_name="Cliente")
+    venda = Sale.objects.create(
+        date="2026-07-10", channel=canal, customer_name="Cliente",
+        products_total=Decimal("40.00"),
+    )
     item = SaleItem.objects.create(
-        sale=venda, product=produto, qty=1, unit_price=Decimal("40.00")
+        sale=venda, product=produto, qty=1
     )
     refresh_snapshots(venda)
     item.refresh_from_db()
@@ -78,6 +82,8 @@ def test_admin_nao_reescreve_snapshot_em_edicao_sem_efeito_no_calculo(admin_clie
             "channel": canal.pk,
             "customer_name": "Romilda",
             "status": "completed",
+            "products_total": "40.00",
+            "shipping_amount": "0.00",
             "items-TOTAL_FORMS": "1",
             "items-INITIAL_FORMS": "1",
             "items-MIN_NUM_FORMS": "0",
@@ -86,8 +92,6 @@ def test_admin_nao_reescreve_snapshot_em_edicao_sem_efeito_no_calculo(admin_clie
             "items-0-sale": str(venda.pk),
             "items-0-product": str(produto.pk),
             "items-0-qty": "1",
-            "items-0-unit_price": "40.00",
-            "items-0-unit_freight": "0.00",
         },
     )
 
