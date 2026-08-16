@@ -23,7 +23,12 @@ from .models import (
 )
 from .services.costing import q2, unit_cogs
 from .services.pricing import suggested_price
-from .services.sales import refresh_snapshots
+from .services.sales import (
+    calculate_sale,
+    kept_fee_override,
+    refresh_snapshots,
+    snapshot_result,
+)
 
 
 def cost_payload(cogs, margin):
@@ -40,7 +45,12 @@ class ModelCleanMixin:
     def validate(self, attrs):
         attrs = super().validate(attrs)
         # campos aninhados são listas e não pertencem diretamente à instância
-        own = {key: value for key, value in attrs.items() if not isinstance(value, list)}
+        model_fields = {field.name for field in self.Meta.model._meta.fields}
+        own = {
+            key: value
+            for key, value in attrs.items()
+            if key in model_fields and not isinstance(value, list)
+        }
         if self.instance is None:
             instance = self.Meta.model(**own)
         else:
@@ -83,6 +93,8 @@ class NestedWriteMixin:
         related.all().delete()
         for child in children:
             related.create(**child)
+        if hasattr(instance, "_prefetched_objects_cache"):
+            instance._prefetched_objects_cache.pop(self.nested_field, None)
 
 
 class MakerSerializer(serializers.ModelSerializer):
@@ -210,8 +222,10 @@ class ProductPreviewSerializer(ProductSerializer):
 class SaleItemSerializer(ModelCleanMixin, serializers.ModelSerializer):
     # snapshots são calculados por services/sales, nunca digitados pelo cliente
     product_name = serializers.CharField(source="product.name", read_only=True)
-    unit_profit = serializers.DecimalField(
-        max_digits=9, decimal_places=2, read_only=True
+    # select_related do maker: unit_cogs lê product.maker.hourly_rate, e o
+    # preview roda a cada 400ms de digitação — sem isso é 1 query extra por item
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.select_related("maker")
     )
 
     class Meta:
@@ -221,19 +235,87 @@ class SaleItemSerializer(ModelCleanMixin, serializers.ModelSerializer):
             "product",
             "product_name",
             "qty",
-            "unit_price",
-            "unit_freight",
             "unit_cogs",
-            "unit_fee",
-            "unit_profit",
         ]
-        read_only_fields = ["unit_cogs", "unit_fee"]
+        read_only_fields = ["unit_cogs"]
 
 
-class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
+def sale_result_payload(result):
+    """Serializa Decimals do service sem converter dinheiro para float."""
+    return {
+        key: str(value) if isinstance(value, Decimal) else value
+        for key, value in result.items()
+        if key != "item_cogs"
+    }
+
+
+class SalePreviewSerializer(serializers.Serializer):
+    channel = serializers.PrimaryKeyRelatedField(queryset=Channel.objects.all())
+    products_total = serializers.DecimalField(
+        max_digits=11, decimal_places=2, min_value=Decimal("0.01")
+    )
+    shipping_amount = serializers.DecimalField(
+        max_digits=11,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        default=Decimal("0"),
+    )
+    fee_override = serializers.DecimalField(
+        max_digits=11,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+    )
+    items = SaleItemSerializer(many=True)
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("A venda precisa de ao menos um item.")
+        return value
+
+    def calculate(self):
+        rows = [
+            SaleItem(product=item["product"], qty=item.get("qty", 1))
+            for item in self.validated_data["items"]
+        ]
+        try:
+            return calculate_sale(
+                self.validated_data["channel"],
+                self.validated_data["products_total"],
+                rows,
+                shipping_amount=self.validated_data.get("shipping_amount", Decimal("0")),
+                fee_override=self.validated_data.get("fee_override"),
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+
+
+FEE_UNSET = object()
+
+
+class SaleSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSerializer):
     nested_field = "items"
     items = SaleItemSerializer(many=True, required=False)
     channel_name = serializers.CharField(source="channel.name", read_only=True)
+    fee_override = serializers.DecimalField(
+        max_digits=11,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    total_cogs = serializers.DecimalField(
+        max_digits=13, decimal_places=2, read_only=True
+    )
+    profit = serializers.DecimalField(max_digits=13, decimal_places=2, read_only=True)
+    margin_pct = serializers.DecimalField(
+        max_digits=9, decimal_places=4, read_only=True
+    )
+    amount_paid = serializers.DecimalField(
+        max_digits=13, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = Sale
@@ -244,13 +326,27 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
             "channel_name",
             "customer_name",
             "status",
+            "products_total",
+            "shipping_amount",
+            "channel_fee",
+            "fee_source",
+            "fee_override",
+            "total_cogs",
+            "profit",
+            "margin_pct",
+            "amount_paid",
             "items",
         ]
+        read_only_fields = ["channel_fee", "fee_source"]
 
     @transaction.atomic
     def create(self, validated_data):
+        fee_override = validated_data.pop("fee_override", None)
         sale = super().create(validated_data)
-        refresh_snapshots(sale)
+        try:
+            refresh_snapshots(sale, fee_override=fee_override)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         return sale
 
     def validate(self, attrs):
@@ -258,12 +354,7 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
         # venda é derivada dos itens: sem item não há receita nem lucro. A API é
         # o trust boundary — o front já barra, mas um script não pode criar nem
         # esvaziar uma venda por aqui (arquitetura §1, "não existe item avulso").
-        creating = self.instance is None
-        if creating and not attrs.get("items"):
-            raise serializers.ValidationError(
-                {"items": "A venda precisa de ao menos um item."}
-            )
-        if not creating and "items" in attrs and not attrs["items"]:
+        if (self.instance is None or "items" in attrs) and not attrs.get("items"):
             raise serializers.ValidationError(
                 {"items": "A venda precisa de ao menos um item."}
             )
@@ -271,60 +362,65 @@ class SaleSerializer(NestedWriteMixin, serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        # snapshot só é refeito quando o payload ALTERA canal ou itens, não quando
-        # eles apenas vêm no corpo (arquitetura §1.3). Verificar ANTES do super():
-        # NestedWriteMixin.update consome "items".
+        fee_override = validated_data.pop("fee_override", FEE_UNSET)
+        previous_fee_source = instance.fee_source
+        previous_fee = instance.channel_fee
         channel_changed = (
             validated_data.get("channel", instance.channel) != instance.channel
+        )
+        total_changed = (
+            validated_data.get("products_total", instance.products_total)
+            != instance.products_total
         )
         items_changed = "items" in validated_data and self._items_changed(
             instance, validated_data["items"]
         )
-        # itens idênticos NÃO podem ser reescritos: o delete+recreate do
-        # NestedWriteMixin recongelaria o snapshot com os parâmetros de hoje.
-        # Tirar "items" do payload evita o rewrite; refresh_snapshots ainda roda
-        # nas linhas atuais se o canal mudou.
+        fee_changed = fee_override is not FEE_UNSET and (
+            (fee_override is None and previous_fee_source == Sale.FeeSource.MANUAL)
+            or (
+                fee_override is not None
+                and (
+                    previous_fee_source != Sale.FeeSource.MANUAL
+                    or previous_fee != fee_override
+                )
+            )
+        )
         if "items" in validated_data and not items_changed:
             validated_data.pop("items")
         sale = super().update(instance, validated_data)
-        if channel_changed or items_changed:
-            refresh_snapshots(sale)
+        if channel_changed or total_changed or items_changed or fee_changed:
+            effective_override = fee_override
+            if effective_override is FEE_UNSET:
+                effective_override = kept_fee_override(
+                    previous_fee_source, previous_fee, channel_changed
+                )
+            try:
+                refresh_snapshots(sale, fee_override=effective_override)
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.message_dict) from exc
         return sale
 
     @staticmethod
     def _items_changed(instance, incoming):
         """Compara os itens do payload com os salvos, posição a posição.
 
-        Só o que a usuária digita entra na conta (produto, qtd, preço, frete);
-        unit_cogs/unit_fee são congelados e não. Comparação posicional espelha
-        o diff do front (sale-form.tsx); reordenar conta como mudança.
+        Só produto e quantidade entram na comparação. `unit_cogs` é congelado
+        pelo backend; reordenar conta como mudança.
         """
         existing = list(instance.items.all())
         if len(existing) != len(incoming):
             return True
-        # frete None no payload = "usar o padrão do canal", que é o que ficou
-        # congelado na linha; resolver antes de comparar evita falso positivo
-        default_freight = instance.channel.default_freight or Decimal("0")
         for old, new in zip(existing, incoming):
-            freight = new.get("unit_freight")
-            if freight is None:
-                freight = default_freight
             if (
                 old.product_id != new["product"].pk
                 or old.qty != new["qty"]
-                or old.unit_price != new["unit_price"]
-                or old.unit_freight != freight
             ):
                 return True
         return False
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        items = list(instance.items.all())
-        total = sum((item.qty * item.unit_price for item in items), Decimal("0"))
-        profit = sum((item.qty * item.unit_profit for item in items), Decimal("0"))
-        data["total"] = str(q2(total))
-        data["profit"] = str(q2(profit))
+        data.update(sale_result_payload(snapshot_result(instance)))
         return data
 
 

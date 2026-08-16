@@ -32,18 +32,20 @@ def test_componente_so_em_produto_kit():
 
 def test_produto_inativo_nao_vende():
     produto = Product.objects.create(name="Descontinuado", is_active=False)
-    sale = Sale.objects.create(date=date(2026, 7, 18), channel=canal())
-    item = SaleItem(sale=sale, product=produto, qty=1, unit_price=Decimal("10.00"))
+    sale = Sale.objects.create(
+        date=date(2026, 7, 18), channel=canal(), products_total=Decimal("10.00")
+    )
+    item = SaleItem(sale=sale, product=produto, qty=1)
     with pytest.raises(ValidationError):
         item.full_clean()
 
 
-def test_preco_zero_bloqueado():
-    produto = Product.objects.create(name="Caneca")
-    sale = Sale.objects.create(date=date(2026, 7, 18), channel=canal())
-    item = SaleItem(sale=sale, product=produto, qty=1, unit_price=Decimal("0"))
+def test_total_da_venda_zero_bloqueado():
+    sale = Sale(
+        date=date(2026, 7, 18), channel=canal(), products_total=Decimal("0")
+    )
     with pytest.raises(ValidationError):
-        item.full_clean()
+        sale.full_clean()
 
 
 def test_tempo_de_producao_exige_artesa():
@@ -74,3 +76,43 @@ def test_perda_acima_de_100pct_bloqueada():
     produto = Product(name="Caneca", waste_pct=Decimal("1.5"))
     with pytest.raises(ValidationError):
         produto.full_clean()
+
+
+def test_venda_guarda_fatos_financeiros_no_cabecalho():
+    sale = Sale.objects.create(
+        date=date(2026, 8, 8),
+        channel=canal(),
+        products_total=Decimal("100.00"),
+        shipping_amount=Decimal("15.00"),
+        channel_fee=Decimal("20.00"),
+    )
+
+    sale.refresh_from_db()
+    assert sale.products_total == Decimal("100.00")
+    assert sale.shipping_amount == Decimal("15.00")
+    assert sale.channel_fee == Decimal("20.00")
+    assert sale.fee_source == Sale.FeeSource.SUGGESTED
+    assert sale.legacy_freight_cost == Decimal("0.00")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("products_total", Decimal("0")),
+        ("shipping_amount", Decimal("-0.01")),
+        ("channel_fee", Decimal("-0.01")),
+    ],
+)
+def test_venda_rejeita_valores_financeiros_invalidos(field, value):
+    values = {
+        "products_total": Decimal("10.00"),
+        "shipping_amount": Decimal("0"),
+        "channel_fee": Decimal("0"),
+    }
+    values[field] = value
+    sale = Sale(date=date(2026, 8, 8), channel=canal(), **values)
+
+    with pytest.raises(ValidationError) as error:
+        sale.full_clean()
+
+    assert field in error.value.message_dict

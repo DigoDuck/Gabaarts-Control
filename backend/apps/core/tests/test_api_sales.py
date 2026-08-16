@@ -15,6 +15,7 @@ def caneca():
         packaging_cost=Decimal("3.00"),
         production_time_min=10,
         maker=Maker.objects.get(name="Filha"),
+        base_price=Decimal("40.00"),
     )
 
 
@@ -26,7 +27,9 @@ def nova_venda(api, caneca, slug="shopee", price="40.00", qty=1, dia="2026-07-10
             "channel": Channel.objects.get(slug=slug).pk,
             "customer_name": "Cliente",
             "status": "completed",
-            "items": [{"product": caneca.pk, "qty": qty, "unit_price": price}],
+            "products_total": str(Decimal(price) * qty),
+            "shipping_amount": "0.00",
+            "items": [{"product": caneca.pk, "qty": qty}],
         },
         format="json",
     )
@@ -37,9 +40,8 @@ def test_criar_venda_congela_snapshot(api, caneca):
     assert response.status_code == 201, response.content
     item = response.json()["items"][0]
     assert item["unit_cogs"] == "15.16"
-    assert item["unit_fee"] == "12.00"
-    assert item["unit_freight"] == "0.00"
-    assert item["unit_profit"] == "12.84"
+    assert response.json()["channel_fee"] == "12.00"
+    assert response.json()["profit"] == "12.84"
 
 
 def test_mudar_custo_hora_nao_reescreve_venda_passada(api, caneca):
@@ -59,7 +61,7 @@ def test_editar_venda_recalcula_snapshot(api, caneca):
         format="json",
     )
     assert response.status_code == 200, response.content
-    assert response.json()["items"][0]["unit_fee"] == "0.00"
+    assert response.json()["channel_fee"] == "0.00"
 
 
 def test_produto_inativo_nao_pode_ser_vendido(api, caneca):
@@ -76,7 +78,7 @@ def test_preco_zero_e_rejeitado(api, caneca):
 
 def test_venda_traz_total_e_lucro(api, caneca):
     body = nova_venda(api, caneca, qty=2).json()
-    assert body["total"] == "80.00"
+    assert body["products_total"] == "80.00"
     assert body["profit"] == "25.68"
 
 
@@ -87,6 +89,7 @@ def test_venda_sem_itens_e_rejeitada(api):
         {
             "date": "2026-07-10",
             "channel": Channel.objects.get(slug="shopee").pk,
+            "products_total": "40.00",
             "items": [],
         },
         format="json",
@@ -111,8 +114,6 @@ def test_reenviar_itens_identicos_nao_reescreve_snapshot(api, caneca):
                 {
                     "product": item["product"],
                     "qty": item["qty"],
-                    "unit_price": item["unit_price"],
-                    "unit_freight": item["unit_freight"],
                 }
             ]
         },
@@ -122,27 +123,17 @@ def test_reenviar_itens_identicos_nao_reescreve_snapshot(api, caneca):
     assert response.json()["items"][0]["unit_cogs"] == "15.16"
 
 
-def test_mudar_preco_de_um_item_reescreve_snapshot(api, caneca):
+def test_mudar_total_do_pedido_reescreve_snapshot(api, caneca):
     sale = nova_venda(api, caneca).json()
-    item = sale["items"][0]
     response = api.patch(
         f"/api/sales/{sale['id']}/",
-        {
-            "items": [
-                {
-                    "product": item["product"],
-                    "qty": item["qty"],
-                    "unit_price": "50.00",
-                    "unit_freight": item["unit_freight"],
-                }
-            ]
-        },
+        {"products_total": "50.00"},
         format="json",
     )
     assert response.status_code == 200, response.content
     body = response.json()
-    assert body["items"][0]["unit_price"] == "50.00"
-    assert body["total"] == "50.00"
+    assert body["products_total"] == "50.00"
+    assert body["channel_fee"] == "14.00"
 
 
 def test_filtro_por_periodo_e_canal(api, caneca):

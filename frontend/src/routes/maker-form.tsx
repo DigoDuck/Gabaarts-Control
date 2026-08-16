@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { Field } from "@/components/field"
+import { Field, MoneyField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { createMaker, getMaker, updateMaker, type MakerPayload } from "@/lib/makers"
@@ -106,17 +106,14 @@ export function MakerForm() {
         onChange={(event) => set("name", event.target.value)}
       />
 
-      <Field
+      <MoneyField
         label="Custo por hora (R$)"
         name="hourly_rate"
-        type="number"
-        step="0.01"
-        min="0"
         required
         hint="Quanto custa uma hora de trabalho desta artesã."
         value={form.hourly_rate}
         error={fieldError(errors, "hourly_rate")}
-        onChange={(event) => set("hourly_rate", event.target.value)}
+        onValueChange={(value) => set("hourly_rate", value)}
       />
 
       <div className="flex gap-2">

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { Field, SelectField } from "@/components/field"
+import { Field, MoneyField, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { fractionToPercent, money, percentToFraction } from "@/lib/format"
@@ -222,27 +222,21 @@ export function ProductForm() {
           onChange={(event) => set("category", event.target.value)}
         />
 
-        <Field
+        <MoneyField
           label="Material por unidade (R$)"
           name="material_cost"
-          type="number"
-          step="0.01"
-          min="0"
           hint="Custo do insumo de UMA peça, não do lote."
           value={form.material_cost}
           error={fieldError(errors, "material_cost")}
-          onChange={(event) => set("material_cost", event.target.value)}
+          onValueChange={(value) => set("material_cost", value)}
         />
 
-        <Field
+        <MoneyField
           label="Embalagem por unidade (R$)"
           name="packaging_cost"
-          type="number"
-          step="0.01"
-          min="0"
           value={form.packaging_cost}
           error={fieldError(errors, "packaging_cost")}
-          onChange={(event) => set("packaging_cost", event.target.value)}
+          onValueChange={(value) => set("packaging_cost", value)}
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -301,16 +295,13 @@ export function ProductForm() {
           />
         </div>
 
-        <Field
+        <MoneyField
           label="Preço praticado (R$)"
           name="base_price"
-          type="number"
-          step="0.01"
-          min="0"
           hint="Opcional: o preço que você cobra hoje."
           value={form.base_price}
           error={fieldError(errors, "base_price")}
-          onChange={(event) => set("base_price", event.target.value)}
+          onValueChange={(value) => set("base_price", value)}
         />
 
         <label className="flex items-center gap-2 text-sm">

@@ -2,7 +2,7 @@ import { TriangleAlert } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 
 import { Flame } from "@/components/brand"
-import { Field, SelectField } from "@/components/field"
+import { Field, MoneyField, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { money, percent } from "@/lib/format"
 import { listChannels, type Channel } from "@/lib/channels"
@@ -123,15 +123,12 @@ export function Pricing() {
           options={channels.map((item) => ({ value: item.id, label: item.name }))}
           onChange={(event) => setChannel(event.target.value)}
         />
-        <Field
+        <MoneyField
           label="Frete (R$)"
           name="freight"
-          type="number"
-          step="0.01"
-          min="0"
           hint="Vazio usa o frete padrão do canal."
           value={freight}
-          onChange={(event) => setFreight(event.target.value)}
+          onValueChange={setFreight}
         />
       </div>
 
@@ -149,14 +146,11 @@ export function Pricing() {
             title="Margem num preço"
             question="Vendendo a este preço, sobra quanto?"
           >
-            <Field
+            <MoneyField
               label="Preço de venda (R$)"
               name="price"
-              type="number"
-              step="0.01"
-              min="0.01"
               value={price}
-              onChange={(event) => setPrice(event.target.value)}
+              onValueChange={setPrice}
             />
             <Panel
               state={simulation.state}

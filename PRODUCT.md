@@ -26,7 +26,7 @@ Consequências diretas de ter uma usuária não-técnica como principal:
 
 A planilha original marcava as células em duas cores: **amarela** você preenche, **branca** a fórmula calcula. Esse é o contrato de UI do sistema inteiro.
 
-1. **Nada derivado é digitável.** COGS, preço sugerido, margem, lucro, taxa de canal e total nunca aparecem como campo editável. Se um número pode ser calculado, ele é calculado — a planilha tinha lucro digitado à mão em algumas linhas e por isso mentia.
+1. **Nada derivado é digitável.** COGS, preço sugerido, margem e lucro nunca aparecem como campo editável. `products_total` e `shipping_amount` são fatos do pedido e são digitados. A taxa do canal é sugerida pelo sistema, mas pode receber o total real descontado pela plataforma; a origem fica identificada e congelada.
 2. **O cálculo aparece junto da decisão.** Mexer na margem-alvo e ver o preço mudar era o que tornava a planilha útil. Formulário onde o número só aparece depois de salvar perde isso.
 3. **O tempo não é grátis.** Mesmo sem salário, a hora da Rouseli e da filha entra no custo. Nenhuma tela pode sugerir que produto sem custo de material é produto sem custo.
 4. **Registrar venda é registrar um fato passado.** O preço já foi cobrado; a tela anota, não simula. Simulação tem tela própria.
@@ -39,7 +39,7 @@ A planilha original marcava as células em duas cores: **amarela** você preench
 | Produtos (lista) | Ver catálogo com custo, preço sugerido e situação | ✅ fase 2b |
 | Produto (formulário) | Cadastrar/editar produto e kit, com custo calculado ao vivo | 🔜 fase 2c-1 |
 | Vendas (lista) | Ver vendas do período com total e lucro | 🔜 fase 2c-1 |
-| Venda (formulário) | Registrar venda com N itens; custo e taxa congelam na criação | 🔜 fase 2c-1 |
+| Venda (formulário) | Registrar N itens pelo total dos produtos; ver custo, taxa, lucro total, margem e total pago antes de salvar | 🔜 melhoria 2c |
 | Canais e faixas | Manter comissão e taxa fixa por faixa de preço | 🔜 fase 2c-2 |
 | Artesãs | Manter custo/hora de quem produz | 🔜 fase 2c-2 |
 | Equipamentos | Patrimônio e valor investido | 🔜 fase 2c-2 |

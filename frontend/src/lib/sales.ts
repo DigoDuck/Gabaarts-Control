@@ -18,27 +18,49 @@ export type SaleItem = {
   product: number
   product_name?: string
   qty: number
-  unit_price: string
-  unit_freight: string | null
-  // congelados pelo backend na criação; nunca enviados no payload
+  // congelado pelo backend na criação; nunca enviado no payload
   unit_cogs?: string
-  unit_fee?: string
-  unit_profit?: string
 }
 
-export type SalePayload = {
-  date: string
+export type SaleFinancialDraft = {
   channel: number
-  customer_name: string
-  status: SaleStatus
+  products_total: string
+  shipping_amount: string
+  fee_override?: string | null
   items: SaleItem[]
 }
 
-export type Sale = SalePayload & {
+export type SalePayload = SaleFinancialDraft & {
+  date: string
+  customer_name: string
+  status: SaleStatus
+}
+
+export type FeeSource = "suggested" | "manual"
+
+export type SaleResult = {
+  total_cogs: string
+  applied_channel_fee: string
+  fee_source: FeeSource
+  profit: string
+  margin_pct: string
+  amount_paid: string
+  warnings: string[]
+  // só o preview conhece a sugestão e a meta: a venda salva guarda o valor
+  // aplicado, não o que teria sido sugerido na época
+  suggested_channel_fee?: string
+  target_margin_pct?: string
+}
+
+export type Sale = Omit<SalePayload, "fee_override"> & {
   id: number
   channel_name: string
-  total: string
+  channel_fee: string
+  fee_source: FeeSource
+  total_cogs: string
   profit: string
+  margin_pct: string
+  amount_paid: string
 }
 
 export function listSales(params: { from?: string; to?: string } = {}) {
@@ -53,6 +75,12 @@ export const getSale = (id: number) => apiFetch<Sale>(`/api/sales/${id}/`)
 
 export const createSale = (payload: SalePayload) =>
   apiFetch<Sale>("/api/sales/", { method: "POST", body: JSON.stringify(payload) })
+
+export const previewSale = (payload: SaleFinancialDraft) =>
+  apiFetch<SaleResult>("/api/sales/preview/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
 
 /**
  * PATCH com apenas os campos alterados, nunca PUT com o payload inteiro.

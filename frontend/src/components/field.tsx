@@ -3,6 +3,7 @@ import type { ComponentProps, ReactNode } from "react"
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { fromCents, money } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type Common = {
@@ -60,6 +61,47 @@ export function Field({
         {...props}
       />
     </Wrapper>
+  )
+}
+
+/** Centavos primeiro, da direita para a esquerda, como banco digital: cada
+ *  dígito empurra o valor uma casa, e o apagar desfaz na mesma ordem. Quem usa
+ *  digita "1250" e lê "R$ 12,50" — nunca precisa achar a vírgula.
+ *
+ *  Para fora o campo continua falando decimal-como-string ("12.50"), que é o
+ *  que a API espera; a máscara não vaza para o estado do formulário.
+ */
+export function MoneyField({
+  value,
+  onValueChange,
+  ...props
+}: Common &
+  Omit<ComponentProps<"input">, "value" | "onChange" | "type"> & {
+    value: string
+    onValueChange: (value: string) => void
+  }) {
+  const caretToEnd = (input: HTMLInputElement) =>
+    input.setSelectionRange(input.value.length, input.value.length)
+
+  return (
+    <Field
+      {...props}
+      type="text"
+      // numeric e não decimal: no celular o teclado abre só com dígitos, já
+      // que vírgula e ponto não têm mais função aqui
+      inputMode="numeric"
+      placeholder={props.placeholder ?? "R$ 0,00"}
+      value={value === "" ? "" : money(value)}
+      onChange={(event) => {
+        const input = event.currentTarget
+        const digits = input.value.replace(/\D/g, "").replace(/^0+/, "").slice(0, 11)
+        onValueChange(digits === "" ? "" : fromCents(Number(digits)))
+        // o valor exibido muda de tamanho a cada dígito; sem isso o cursor
+        // fica no meio da máscara e o próximo dígito entra no lugar errado
+        requestAnimationFrame(() => caretToEnd(input))
+      }}
+      onFocus={(event) => caretToEnd(event.currentTarget)}
+    />
   )
 }
 

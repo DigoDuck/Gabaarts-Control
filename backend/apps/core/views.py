@@ -3,6 +3,7 @@
 from datetime import date
 
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -19,9 +20,11 @@ from .serializers import (
     ProductPreviewSerializer,
     ProductSerializer,
     SaleSerializer,
+    SalePreviewSerializer,
     SimulateInputSerializer,
     TargetPriceInputSerializer,
     cost_payload,
+    sale_result_payload,
 )
 from .services.costing import unit_cogs
 from .services.pricing import simulate, target_price
@@ -102,6 +105,17 @@ class SaleViewSet(viewsets.ModelViewSet):
         .order_by("-date", "-id")
     )
     serializer_class = SaleSerializer
+
+    @action(detail=False, methods=["post"])
+    def preview(self, request):
+        """Apura um rascunho com a mesma regra usada ao congelar a venda."""
+        payload = SalePreviewSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        try:
+            result = payload.calculate()
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.message_dict) from exc
+        return Response(sale_result_payload(result))
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -184,7 +198,7 @@ class SummaryView(APIView):
                 "avg_ticket": str(summary["avg_ticket"]),
                 "by_channel": [
                     {
-                        "channel": row["sale__channel_id"],
+                        "channel": row["channel_id"],
                         "channel_name": row["channel_name"],
                         "revenue": str(row["revenue"]),
                         "profit": str(row["profit"]),

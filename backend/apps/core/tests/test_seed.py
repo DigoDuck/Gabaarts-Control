@@ -1,8 +1,9 @@
 from decimal import Decimal
 
 import pytest
+from django.core.management import call_command
 
-from apps.core.models import Channel, Maker
+from apps.core.models import Channel, Maker, Sale
 
 pytestmark = pytest.mark.django_db
 
@@ -31,3 +32,13 @@ def test_faixas_da_shopee():  # tabela vigente 03/2026, arquitetura §2.1
         (Decimal("100.00"), Decimal("0.1400"), Decimal("20.00")),
         (Decimal("200.00"), Decimal("0.1400"), Decimal("26.00")),
     ]
+
+
+def test_comando_semeia_vendas_com_total_no_cabecalho():
+    call_command("seed_gabaarts", reset_sales=True)
+
+    azulejo_duplo = Sale.objects.get(
+        items__product__name="Azulejo", items__qty=2, customer_name=""
+    )
+    assert azulejo_duplo.products_total == Decimal("80.00")
+    assert azulejo_duplo.items.get().unit_price is None

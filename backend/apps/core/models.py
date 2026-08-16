@@ -158,12 +158,52 @@ class Sale(models.Model):
         COMPLETED = "completed", "Concluída"
         CANCELED = "canceled", "Cancelada"
 
+    class FeeSource(models.TextChoices):
+        SUGGESTED = "suggested", "Sugerida"
+        MANUAL = "manual", "Informada"
+
     date = models.DateField("data")
     channel = models.ForeignKey(Channel, verbose_name="canal", on_delete=models.PROTECT)
     customer_name = models.CharField("cliente", max_length=120, blank=True)
     # default completed: o fluxo real é registrar venda já feita (planilha: 11 de 11 concluídas)
     status = models.CharField(
         "situação", max_length=10, choices=Status.choices, default=Status.COMPLETED
+    )
+    products_total = models.DecimalField(
+        "total dos produtos (R$)",
+        max_digits=11,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    shipping_amount = models.DecimalField(
+        "frete cobrado (R$)",
+        max_digits=11,
+        decimal_places=2,
+        default=Decimal("0"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    channel_fee = models.DecimalField(
+        "taxa do canal (R$)",
+        max_digits=11,
+        decimal_places=2,
+        default=Decimal("0"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    fee_source = models.CharField(
+        "origem da taxa",
+        max_length=10,
+        choices=FeeSource.choices,
+        default=FeeSource.SUGGESTED,
+    )
+    # Preserva o lucro de vendas antigas cujo frete era custo por item. O novo
+    # formulário nunca escreve este campo; frete cobrado passa a ser repasse.
+    legacy_freight_cost = models.DecimalField(
+        "frete histórico (R$)",
+        max_digits=11,
+        decimal_places=2,
+        default=Decimal("0"),
+        validators=[MinValueValidator(Decimal("0"))],
+        editable=False,
     )
 
     class Meta:
@@ -180,30 +220,51 @@ class SaleItem(models.Model):
     )
     product = models.ForeignKey(Product, verbose_name="produto", on_delete=models.PROTECT)
     qty = models.PositiveIntegerField("quantidade", default=1, validators=[MinValueValidator(1)])
-    unit_price = models.DecimalField("preço unitário (R$)", max_digits=9, decimal_places=2)
+    # Colunas legadas mantidas temporariamente para auditoria da migração. O
+    # contrato atual não as expõe nem grava em novas linhas.
+    unit_price = models.DecimalField(
+        "preço unitário legado (R$)",
+        max_digits=9,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     # snapshots congelados na criação/edição da venda (arquitetura §1.3) — lucro deriva SÓ deles
     unit_cogs = models.DecimalField(
         "custo unitário (R$)", max_digits=9, decimal_places=2, default=Decimal("0")
     )
     unit_fee = models.DecimalField(
-        "taxa unitária (R$)", max_digits=9, decimal_places=2, default=Decimal("0")
+        "taxa unitária legada (R$)",
+        max_digits=9,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        editable=False,
     )
     # nullable = "ainda não informado": o snapshot preenche com o default do canal
     unit_freight = models.DecimalField(
-        "frete unitário (R$)", max_digits=9, decimal_places=2, null=True, blank=True
+        "frete unitário legado (R$)",
+        max_digits=9,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        editable=False,
     )
 
     class Meta:
         verbose_name = "item da venda"
         verbose_name_plural = "itens da venda"
+        # a comparação de itens (serializers._items_changed) é posicional; sem
+        # ORDER BY o Postgres devolve na ordem física do heap, que o bulk_update
+        # do snapshot reescreve. Ordem instável = venda antiga re-precificada.
+        ordering = ["id"]
 
     def __str__(self):
         return f"{self.qty}× {self.product}"
 
     def clean(self):
         errors = {}
-        if self.unit_price is not None and self.unit_price <= 0:
-            errors["unit_price"] = "Preço deve ser maior que zero."
         if self.product_id and not self.product.is_active:
             errors["product"] = "Produto inativo não pode ser vendido."
         if errors:
@@ -211,7 +272,14 @@ class SaleItem(models.Model):
 
     @property
     def unit_profit(self):
-        return self.unit_price - self.unit_cogs - self.unit_fee - (self.unit_freight or Decimal("0"))
+        if self.unit_price is None:
+            return None
+        return (
+            self.unit_price
+            - self.unit_cogs
+            - (self.unit_fee or Decimal("0"))
+            - (self.unit_freight or Decimal("0"))
+        )
 
 
 class Equipment(models.Model):
