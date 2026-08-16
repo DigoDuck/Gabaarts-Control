@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { Field, SelectField } from "@/components/field"
+import { Field, MoneyField, SelectField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { listChannels, type Channel } from "@/lib/channels"
@@ -348,13 +348,13 @@ export function SaleForm() {
             <h2 className="font-display text-sm tracking-wide uppercase">Valores do pedido</h2>
             <p className="mt-1 text-sm text-muted-foreground">O total é o valor combinado de todos os produtos, sem o frete.</p>
           </div>
-          <Field label="Total dos produtos (R$)" name="products_total" type="number" inputMode="decimal" step="0.01" min="0.01" required value={productsTotal} error={fieldError(errors, "products_total")} onChange={(event) => setProductsTotal(event.target.value)} />
-          <Field label="Frete cobrado do cliente (R$)" name="shipping_amount" type="number" inputMode="decimal" step="0.01" min="0" value={shippingAmount} hint="Fica separado e não aumenta nem reduz o lucro dos produtos." error={fieldError(errors, "shipping_amount")} onChange={(event) => setShippingAmount(event.target.value)} />
+          <MoneyField label="Total dos produtos (R$)" name="products_total" required value={productsTotal} error={fieldError(errors, "products_total")} onValueChange={setProductsTotal} />
+          <MoneyField label="Frete cobrado do cliente (R$)" name="shipping_amount" value={shippingAmount} hint="Fica separado e não aumenta nem reduz o lucro dos produtos." error={fieldError(errors, "shipping_amount")} onValueChange={setShippingAmount} />
           <label className="flex min-h-11 items-center gap-2 text-sm">
             <input type="checkbox" checked={manualFee} onChange={(event) => { setManualFee(event.target.checked); if (!event.target.checked) setFeeOverride("") }} />
             Informar a taxa real cobrada pela plataforma
           </label>
-          {manualFee && <Field label="Taxa total da plataforma (R$)" name="fee_override" type="number" inputMode="decimal" step="0.01" min="0" required value={feeOverride} hint="Use o valor total exibido no pedido da plataforma." error={fieldError(errors, "fee_override")} onChange={(event) => setFeeOverride(event.target.value)} />}
+          {manualFee && <MoneyField label="Taxa total da plataforma (R$)" name="fee_override" required value={feeOverride} hint="Use o valor total exibido no pedido da plataforma." error={fieldError(errors, "fee_override")} onValueChange={setFeeOverride} />}
         </section>
 
         <div className="flex flex-wrap gap-2">

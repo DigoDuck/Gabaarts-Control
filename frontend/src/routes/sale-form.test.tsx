@@ -60,7 +60,8 @@ function renderForm(path = "/sales/new") {
   )
 }
 
-async function fillFinancialFields(total = "100") {
+// campo de dinheiro entra pelos centavos: "10000" na tela vira R$ 100,00
+async function fillFinancialFields(total = "10000") {
   await screen.findByRole("option", { name: "Caneca" })
   fireEvent.change(screen.getByLabelText("Data"), { target: { value: "2026-08-08" } })
   fireEvent.change(screen.getByLabelText("Canal"), { target: { value: "1" } })
@@ -117,11 +118,11 @@ test("uma resposta antiga não substitui a prévia mais recente", async () => {
   const second = deferred<ReturnType<typeof result>>()
   api.previewSale.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
   renderForm()
-  await fillFinancialFields("80")
+  await fillFinancialFields("8000")
   await waitFor(() => expect(api.previewSale).toHaveBeenCalledTimes(1), { timeout: 1_000 })
 
   fireEvent.change(screen.getByLabelText("Total dos produtos (R$)"), {
-    target: { value: "100" },
+    target: { value: "10000" },
   })
   await waitFor(() => expect(api.previewSale).toHaveBeenCalledTimes(2), { timeout: 1_000 })
 
@@ -139,12 +140,13 @@ test("permite substituir a sugestão pela taxa total realmente cobrada", async (
   await fillFinancialFields()
   fireEvent.click(screen.getByLabelText("Informar a taxa real cobrada pela plataforma"))
   fireEvent.change(screen.getByLabelText("Taxa total da plataforma (R$)"), {
-    target: { value: "25" },
+    target: { value: "2500" },
   })
 
   await waitFor(() =>
     expect(api.previewSale).toHaveBeenLastCalledWith(
-      expect.objectContaining({ fee_override: "25" }),
+      // a máscara é só da tela: o que sai para a API continua decimal
+      expect.objectContaining({ fee_override: "25.00" }),
     ),
   { timeout: 1_000 })
   expect(await screen.findByText("Taxa aplicada")).toBeInTheDocument()

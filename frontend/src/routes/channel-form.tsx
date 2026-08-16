@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { Field } from "@/components/field"
+import { Field, MoneyField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import { fractionToPercent, percentToFraction } from "@/lib/format"
@@ -164,16 +164,13 @@ export function ChannelForm() {
         />
       </div>
 
-      <Field
+      <MoneyField
         label="Frete padrão (R$)"
         name="default_freight"
-        type="number"
-        step="0.01"
-        min="0"
         hint="Opcional: frete usado quando o item não informa o seu."
         value={form.default_freight}
         error={fieldError(errors, "default_freight")}
-        onChange={(event) => set("default_freight", event.target.value)}
+        onValueChange={(value) => set("default_freight", value)}
       />
 
       <fieldset className="grid gap-3 rounded-lg border border-border p-4">
@@ -187,13 +184,10 @@ export function ChannelForm() {
 
         {form.fee_tiers.map((tier, index) => (
           <div key={tier.uid} className="grid gap-2 sm:grid-cols-[8rem_8rem_8rem_auto]">
-            <Field
+            <MoneyField
               label="A partir de (R$)"
-              type="number"
-              step="0.01"
-              min="0"
               value={tier.min_price}
-              onChange={(event) => setTier(index, { min_price: event.target.value })}
+              onValueChange={(value) => setTier(index, { min_price: value })}
             />
             <Field
               label="Comissão (%)"
@@ -207,13 +201,10 @@ export function ChannelForm() {
               value={tier.commission_pct}
               onChange={(event) => setTier(index, { commission_pct: event.target.value })}
             />
-            <Field
+            <MoneyField
               label="Taxa fixa (R$)"
-              type="number"
-              step="0.01"
-              min="0"
               value={tier.fixed_fee}
-              onChange={(event) => setTier(index, { fixed_fee: event.target.value })}
+              onValueChange={(value) => setTier(index, { fixed_fee: value })}
             />
             <div className="flex items-end">
               <Button

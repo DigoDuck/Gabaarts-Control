@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { Field } from "@/components/field"
+import { Field, MoneyField } from "@/components/field"
 import { Button } from "@/components/ui/button"
 import { ApiError, fieldError, summaryErrors, type FieldErrors } from "@/lib/api"
 import {
@@ -154,15 +154,12 @@ export function EquipmentForm() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
+        <MoneyField
           label="Valor pago (R$)"
           name="value"
-          type="number"
-          step="0.01"
-          min="0"
           value={form.value}
           error={fieldError(errors, "value")}
-          onChange={(event) => set("value", event.target.value)}
+          onValueChange={(value) => set("value", value)}
         />
         <Field
           label="Vida útil (meses)"
