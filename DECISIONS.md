@@ -115,3 +115,10 @@ Gatilho de revisão: ...
 **Justificativa:** Cinco canais em barra horizontal não justificam uma lib de gráfico. A própria spec listava "Recharts renderiza cor fora dos tokens (viola DESIGN.md)" como risco a mitigar — risco que deixa de existir sem a lib. Zero KB de bundle e nenhuma cor fora de token.
 **Trade-off aceito:** A lib não fica "pronta para visualizações futuras", que era parte da intenção original; a primeira visualização com eixo ou série temporal vai pagar o custo de instalá-la.
 **Gatilho de revisão:** Primeira visualização que precise de eixo, tooltip, série temporal ou interação — aí a lib entra com propósito, e a barra CSS não escala.
+
+## #014 — Migração 0005 é forward-only depois do primeiro deploy · 2026-08 · Status: Ativa
+
+**Decisão:** A `0005_order_total_sales` não tem caminho de volta depois que a primeira venda for registrada no formato novo. O reverse existe (a `RunPython` é `noop`), mas falha com `IntegrityError`: as `AlterField` reversas reimpõem `NOT NULL` em `unit_price`/`unit_fee`/`unit_freight`, e toda venda criada após o deploy tem essas colunas nulas por definição. Rollback de schema depois desse ponto é restore de backup, não `migrate` para trás.
+**Justificativa:** O reverse só serviria à janela entre aplicar a migração e registrar a primeira venda, que é curta e coberta por backup. Escrever um reverse que reconstrói preço unitário a partir do total do pedido exigiria redistribuir o total pelos preços-base, ou seja, inventar dado que a migração forward destruiu de propósito — um reverse que mente é pior que nenhum.
+**Trade-off aceito:** Um erro na 0005 descoberto em produção custa restore do Postgres do Railway, com a perda das vendas registradas depois do deploy. Mitigação: as colunas legadas (`unit_price`, `unit_fee`, `unit_freight`) continuam na tabela como auditoria da migração, então o dado antigo não foi apagado, só saiu do contrato.
+**Gatilho de revisão:** Quando as colunas legadas forem removidas (migração futura), este registro fecha e a auditoria some junto — aí o backup passa a ser a única rede.

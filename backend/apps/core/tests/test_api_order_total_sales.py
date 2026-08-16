@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.core.models import Channel, Maker, Product
 
@@ -48,6 +50,30 @@ def test_preview_e_venda_criada_usam_o_mesmo_resultado(api, sale_payload):
     assert preview_body["profit"] == created_body["profit"] == "25.68"
     assert preview_body["margin_pct"] == created_body["margin_pct"] == "0.3210"
     assert preview_body["amount_paid"] == created_body["amount_paid"] == "95.00"
+
+
+def test_preview_nao_faz_uma_query_por_artesa(api, sale_payload, mug):
+    """unit_cogs lê product.maker; o preview roda a cada 400ms de digitação."""
+    outro = Product.objects.create(
+        name="Chaveiro",
+        material_cost=Decimal("2.50"),
+        packaging_cost=Decimal("3.00"),
+        production_time_min=5,
+        maker=Maker.objects.get(name="Rouseli"),
+        base_price=Decimal("20.00"),
+    )
+    sale_payload["items"].append({"product": outro.pk, "qty": 1})
+
+    with CaptureQueriesContext(connection) as queries:
+        response = api.post("/api/sales/preview/", sale_payload, format="json")
+
+    assert response.status_code == 200, response.content
+    # a artesã tem que vir no JOIN do produto, nunca num SELECT à parte
+    maker_reads = [
+        query for query in queries.captured_queries
+        if 'FROM "core_maker"' in query["sql"]
+    ]
+    assert maker_reads == [], [query["sql"] for query in maker_reads]
 
 
 def test_preview_com_taxa_real_identifica_origem_manual(api, sale_payload):
@@ -148,4 +174,5 @@ def test_preview_rejeita_produto_inativo(api, sale_payload, mug):
     response = api.post("/api/sales/preview/", sale_payload, format="json")
 
     assert response.status_code == 400
-    assert "product" in response.json()["items"]["0"]
+    # erro de item aninhado no DRF vem como lista posicional, não dict indexado
+    assert "product" in response.json()["items"][0]

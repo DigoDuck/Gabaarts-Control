@@ -5,7 +5,7 @@ from .models import (
 )
 from .services.costing import q2, unit_cogs
 from .services.pricing import margin_on_price, margin_status, suggested_price
-from .services.sales import refresh_snapshots, snapshot_result
+from .services.sales import kept_fee_override, refresh_snapshots, snapshot_result
 
 admin.site.site_header = "Gabaarts Control"
 admin.site.site_title = "Gabaarts Control"
@@ -123,12 +123,19 @@ class SaleAdmin(admin.ModelAdmin):
         # mesma regra da API (serializers.SaleSerializer.update): o snapshot só
         # é refeito quando a edição mexe no que entra na conta. Corrigir cliente
         # ou situação não pode re-precificar uma venda antiga.
-        recalculates = bool({"channel", "products_total"} & set(form.changed_data)) or any(
+        channel_changed = "channel" in form.changed_data
+        recalculates = channel_changed or "products_total" in form.changed_data or any(
             formset.has_changed() for formset in formsets
+        )
+        # a taxa vinda do extrato é fato digitado por humano; refazer o snapshot
+        # por outro motivo não pode substituí-la pela estimativa (mesmo helper
+        # que a API usa, senão as duas telas divergem de novo)
+        override = kept_fee_override(
+            form.instance.fee_source, form.instance.channel_fee, channel_changed
         )
         super().save_related(request, form, formsets, change)
         if not change or recalculates:
-            refresh_snapshots(form.instance)
+            refresh_snapshots(form.instance, fee_override=override)
 
     @admin.display(description="total (R$)")
     def total_display(self, obj):

@@ -40,14 +40,16 @@ export type FeeSource = "suggested" | "manual"
 
 export type SaleResult = {
   total_cogs: string
-  suggested_channel_fee: string
   applied_channel_fee: string
   fee_source: FeeSource
   profit: string
   margin_pct: string
-  target_margin_pct: string
   amount_paid: string
   warnings: string[]
+  // só o preview conhece a sugestão e a meta: a venda salva guarda o valor
+  // aplicado, não o que teria sido sugerido na época
+  suggested_channel_fee?: string
+  target_margin_pct?: string
 }
 
 export type Sale = Omit<SalePayload, "fee_override"> & {

@@ -12,3 +12,9 @@ export const percent = (fraction: string) => pct.format(Number(fraction))
 export const fractionToPercent = (fraction: string) =>
   String(Math.round(Number(fraction) * 10000) / 100)
 export const percentToFraction = (value: string) => (Number(value || 0) / 100).toFixed(4)
+
+// Somar dinheiro em float dá 0.1 + 0.2 = 0.30000000000000004. Toda conta com
+// dinheiro no front passa por centavos inteiros — o backend continua sendo o
+// dono do cálculo, aqui só se soma o que a tela já tem em mãos.
+export const toCents = (value: string) => Math.round(Number(value || 0) * 100)
+export const fromCents = (cents: number) => (cents / 100).toFixed(2)

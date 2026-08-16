@@ -255,6 +255,10 @@ class SaleItem(models.Model):
     class Meta:
         verbose_name = "item da venda"
         verbose_name_plural = "itens da venda"
+        # a comparação de itens (serializers._items_changed) é posicional; sem
+        # ORDER BY o Postgres devolve na ordem física do heap, que o bulk_update
+        # do snapshot reescreve. Ordem instável = venda antiga re-precificada.
+        ordering = ["id"]
 
     def __str__(self):
         return f"{self.qty}× {self.product}"

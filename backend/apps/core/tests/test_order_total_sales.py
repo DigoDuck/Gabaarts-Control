@@ -8,7 +8,12 @@ from django.test.utils import CaptureQueriesContext
 
 from apps.core.models import Channel, Maker, Product, Sale, SaleItem
 from apps.core.services import sales as sales_service
-from apps.core.services.sales import calculate_sale, refresh_snapshots, snapshot_result
+from apps.core.services.sales import (
+    calculate_sale,
+    kept_fee_override,
+    refresh_snapshots,
+    snapshot_result,
+)
 
 
 pytestmark = pytest.mark.django_db
@@ -180,6 +185,47 @@ def test_refresh_le_as_faixas_do_canal_uma_vez(order):
         and query["sql"].lower().startswith("select")
     ]
     assert len(tier_reads) == 1, [query["sql"] for query in tier_reads]
+
+
+def test_recongelar_zera_o_frete_historico(order):
+    """Re-congelar move a venda para a regra nova: frete deixa de ser custo."""
+    order.legacy_freight_cost = Decimal("2.00")
+    order.save(update_fields=["legacy_freight_cost"])
+
+    frozen = refresh_snapshots(order)
+    order.refresh_from_db()
+
+    assert order.legacy_freight_cost == Decimal("0")
+    # sem o zero aqui, o preview mostraria 17,44 e o banco guardaria 15,44
+    assert frozen["profit"] == Decimal("17.44")
+    assert frozen["profit"] == calculate_sale(
+        order.channel, order.products_total, order.items.all()
+    )["profit"]
+
+
+def test_snapshot_de_venda_legada_sem_itens_nao_explode():
+    """Venda sem item migrou com total zero; listar não pode virar 500."""
+    vazia = Sale.objects.create(
+        date=date(2026, 8, 8),
+        channel=Channel.objects.get(slug="shopee"),
+        products_total=Decimal("0"),
+    )
+
+    assert snapshot_result(vazia)["margin_pct"] == Decimal("0")
+
+
+@pytest.mark.parametrize(
+    ("fee_source", "channel_changed", "expected"),
+    [
+        (Sale.FeeSource.MANUAL, False, Decimal("9.00")),
+        (Sale.FeeSource.MANUAL, True, None),
+        (Sale.FeeSource.SUGGESTED, False, None),
+    ],
+)
+def test_taxa_manual_so_e_descartada_quando_o_canal_muda(
+    fee_source, channel_changed, expected
+):
+    assert kept_fee_override(fee_source, Decimal("9.00"), channel_changed) == expected
 
 
 def test_refresh_e_atomico(order, monkeypatch):

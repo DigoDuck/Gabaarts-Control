@@ -112,6 +112,16 @@ pode substituir a sugestão. A taxa informada é um fato observado, não uma fó
 alternativa. Vendas anteriores preservam lucro e receita por migração; eventual
 frete antigo não zero fica em `legacy_freight_cost`, somente leitura.
 
+Refinado em 15/08/2026 (review da melhoria): re-congelar uma venda **zera** o
+`legacy_freight_cost`. Refazer o snapshot é declarar que a venda passa a viver sob
+a regra nova, em que frete é repasse e não custo; manter o frete velho como custo
+deixaria a venda numa regra híbrida e faria o preview mostrar um lucro diferente do
+que seria gravado. Enquanto a venda não é re-congelada, o valor histórico continua
+intacto. A taxa com `fee_source = manual` é fato digitado por humano: ela sobrevive
+a qualquer re-apuração, exceto quando o canal muda (aí a faixa é outra e a
+estimativa volta a valer). Admin e API decidem isso pelo mesmo
+`services/sales.kept_fee_override()`.
+
 ### 1.4 Kits (combos)
 
 Kit é `Product` com `is_combo=True` e 2+ `ComboItem`. Custo do kit:

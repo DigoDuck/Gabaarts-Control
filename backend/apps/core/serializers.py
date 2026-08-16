@@ -23,7 +23,12 @@ from .models import (
 )
 from .services.costing import q2, unit_cogs
 from .services.pricing import suggested_price
-from .services.sales import calculate_sale, refresh_snapshots, snapshot_result
+from .services.sales import (
+    calculate_sale,
+    kept_fee_override,
+    refresh_snapshots,
+    snapshot_result,
+)
 
 
 def cost_payload(cogs, margin):
@@ -217,6 +222,12 @@ class ProductPreviewSerializer(ProductSerializer):
 class SaleItemSerializer(ModelCleanMixin, serializers.ModelSerializer):
     # snapshots são calculados por services/sales, nunca digitados pelo cliente
     product_name = serializers.CharField(source="product.name", read_only=True)
+    # select_related do maker: unit_cogs lê product.maker.hourly_rate, e o
+    # preview roda a cada 400ms de digitação — sem isso é 1 query extra por item
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.select_related("maker")
+    )
+
     class Meta:
         model = SaleItem
         fields = [
@@ -343,12 +354,7 @@ class SaleSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeriali
         # venda é derivada dos itens: sem item não há receita nem lucro. A API é
         # o trust boundary — o front já barra, mas um script não pode criar nem
         # esvaziar uma venda por aqui (arquitetura §1, "não existe item avulso").
-        creating = self.instance is None
-        if creating and not attrs.get("items"):
-            raise serializers.ValidationError(
-                {"items": "A venda precisa de ao menos um item."}
-            )
-        if not creating and "items" in attrs and not attrs["items"]:
+        if (self.instance is None or "items" in attrs) and not attrs.get("items"):
             raise serializers.ValidationError(
                 {"items": "A venda precisa de ao menos um item."}
             )
@@ -385,11 +391,8 @@ class SaleSerializer(ModelCleanMixin, NestedWriteMixin, serializers.ModelSeriali
         if channel_changed or total_changed or items_changed or fee_changed:
             effective_override = fee_override
             if effective_override is FEE_UNSET:
-                effective_override = (
-                    previous_fee
-                    if previous_fee_source == Sale.FeeSource.MANUAL
-                    and not channel_changed
-                    else None
+                effective_override = kept_fee_override(
+                    previous_fee_source, previous_fee, channel_changed
                 )
             try:
                 refresh_snapshots(sale, fee_override=effective_override)

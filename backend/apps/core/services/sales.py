@@ -29,9 +29,11 @@ def _validated_items(items):
     for index, item in enumerate(rows):
         if item.qty < 1:
             errors[f"items.{index}.qty"] = "Quantidade deve ser ao menos 1."
+        # elif: as duas mensagens moram na mesma chave, e a segunda apagaria a
+        # primeira num produto inativo E sem preço-base.
         if not item.product.is_active:
             errors[f"items.{index}.product"] = "Produto inativo não pode ser vendido."
-        if item.product.base_price is None or item.product.base_price <= 0:
+        elif item.product.base_price is None or item.product.base_price <= 0:
             errors[f"items.{index}.product"] = (
                 "Cadastre um preço-base positivo para estimar a taxa do pedido."
             )
@@ -81,6 +83,8 @@ def calculate_sale(
     suggested_fee = ZERO
     for item in rows:
         estimated_unit_price = products_total * item.product.base_price / base_total
+        # q2 por unidade e não só no fim: a plataforma cobra a taxa (percentual +
+        # fixo) uma vez por unidade vendida, então o centavo fecha por unidade.
         unit_fee = q2(fee_from_tiers(loaded_tiers, estimated_unit_price)["total"])
         suggested_fee += unit_fee * item.qty
     suggested_fee = q2(suggested_fee)
@@ -129,6 +133,17 @@ def calculate_sale(
     }
 
 
+def kept_fee_override(fee_source, channel_fee, channel_changed):
+    """Taxa informada à mão sobrevive à re-apuração, salvo se o canal mudou.
+
+    Ponto único da regra: Admin e API precisam decidir igual, senão corrigir uma
+    venda por uma das telas apaga o valor que veio do extrato da plataforma.
+    """
+    if fee_source == Sale.FeeSource.MANUAL and not channel_changed:
+        return channel_fee
+    return None
+
+
 def snapshot_result(sale):
     """Lê somente fatos e snapshots persistidos, sem usar parâmetros atuais."""
     rows = list(sale.items.all())
@@ -144,7 +159,8 @@ def snapshot_result(sale):
         "applied_channel_fee": q2(sale.channel_fee),
         "fee_source": sale.fee_source,
         "profit": profit,
-        "margin_pct": q4(profit / sale.products_total),
+        # venda legada sem itens migrou com total zero; listar não pode virar 500
+        "margin_pct": q4(profit / sale.products_total) if sale.products_total else ZERO,
         "amount_paid": q2(sale.products_total + sale.shipping_amount),
     }
 
@@ -169,7 +185,11 @@ def refresh_snapshots(sale, fee_override=None):
 
     sale.channel_fee = calculation["applied_channel_fee"]
     sale.fee_source = calculation["fee_source"]
-    sale.save(update_fields=["channel_fee", "fee_source"])
+    # Re-congelar move a venda para a regra nova, em que frete é repasse e não
+    # custo. Zerar aqui é o que mantém preview e valor gravado iguais: a
+    # apuração acima não conhece o frete histórico (arquitetura §1.3, 15/08/2026).
+    sale.legacy_freight_cost = ZERO
+    sale.save(update_fields=["channel_fee", "fee_source", "legacy_freight_cost"])
 
     frozen = snapshot_result(sale)
     frozen.update(
